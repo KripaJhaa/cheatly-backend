@@ -103,16 +103,16 @@ export function safeEqual(left, right) {
 }
 
 export function razorpaySignature(orderID, paymentID) {
-  return crypto.createHmac('sha256', requireEnv('RAZORPAY_KEY_SECRET')).update(`${orderID}|${paymentID}`).digest('hex');
+  return crypto.createHmac('sha256', requireEnv('RAZORPAY_KEY_SECRET').trim()).update(`${orderID}|${paymentID}`).digest('hex');
 }
 
 export function webhookSignature(raw) {
-  return crypto.createHmac('sha256', requireEnv('RAZORPAY_WEBHOOK_SECRET')).update(raw).digest('hex');
+  return crypto.createHmac('sha256', requireEnv('RAZORPAY_WEBHOOK_SECRET').trim()).update(raw).digest('hex');
 }
 
 export async function razorpay(path, options = {}) {
-  const keyID = requireEnv('RAZORPAY_KEY_ID');
-  const keySecret = requireEnv('RAZORPAY_KEY_SECRET');
+  const keyID = requireEnv('RAZORPAY_KEY_ID').trim();
+  const keySecret = requireEnv('RAZORPAY_KEY_SECRET').trim();
   const response = await fetch(`https://api.razorpay.com/v1${path}`, {
     ...options,
     headers: { 'Content-Type': 'application/json', Authorization: `Basic ${Buffer.from(`${keyID}:${keySecret}`).toString('base64')}`, ...(options.headers || {}) }
