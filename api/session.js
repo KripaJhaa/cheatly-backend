@@ -6,7 +6,11 @@ export default async function handler(req, res) {
     const body = await readJSON(req);
     const installID = String(body.install_id || body.installID || '').trim();
     if (installID.length < 8 || installID.length > 180) return send(res, 400, { error: 'A valid install_id is required' });
-    const row = await getOrCreateSession(installID, body.email);
+    const email = String(body.email || '').trim().toLowerCase();
+    const mobile = String(body.mobile || '').trim();
+    if (!/^\S+@\S+\.\S+$/.test(email)) return send(res, 400, { error: 'A valid email is required' });
+    if (!/^\+?[0-9 ()-]{8,20}$/.test(mobile)) return send(res, 400, { error: 'A valid mobile number is required' });
+    const row = await getOrCreateSession(installID, email, mobile);
     return send(res, 200, { session_id: row.session_id, status: row.status, expires_at: row.trial_expires_at, checkout_url: checkoutURL(row.session_id) });
   } catch (error) {
     console.error(error);

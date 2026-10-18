@@ -21,6 +21,7 @@ export async function ensureSchema() {
         session_id UUID PRIMARY KEY,
         install_id TEXT NOT NULL UNIQUE,
         email TEXT,
+        mobile TEXT,
         status TEXT NOT NULL DEFAULT 'trial' CHECK (status IN ('trial', 'paid', 'expired')),
         trial_expires_at TIMESTAMPTZ NOT NULL,
         razorpay_order_id TEXT UNIQUE,
@@ -28,6 +29,7 @@ export async function ensureSchema() {
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
+      ALTER TABLE cheaty_sessions ADD COLUMN IF NOT EXISTS mobile TEXT;
       CREATE INDEX IF NOT EXISTS cheaty_sessions_status_idx ON cheaty_sessions(status);
     `);
   }
@@ -66,16 +68,24 @@ export function trialDays() {
   return Number.isFinite(days) && days > 0 ? Math.min(days, 30) : 7;
 }
 
-export async function getOrCreateSession(installID, email = null) {
+export async function getOrCreateSession(installID, email = null, mobile = null) {
   await ensureSchema();
   const existing = await database().query('SELECT * FROM cheaty_sessions WHERE install_id=$1', [installID]);
-  if (existing.rows[0]) return existing.rows[0];
+  if (existing.rows[0]) {
+    if (email || mobile) {
+      return (await database().query(
+        `UPDATE cheaty_sessions SET email=COALESCE($2,email), mobile=COALESCE($3,mobile), updated_at=NOW() WHERE install_id=$1 RETURNING *`,
+        [installID, email ? String(email).slice(0, 320) : null, mobile ? String(mobile).slice(0, 32) : null]
+      )).rows[0];
+    }
+    return existing.rows[0];
+  }
   const sessionID = crypto.randomUUID();
   const expires = new Date(Date.now() + trialDays() * 86400000);
   try {
     const created = await database().query(
-      `INSERT INTO cheaty_sessions(session_id, install_id, email, trial_expires_at) VALUES($1,$2,$3,$4) RETURNING *`,
-      [sessionID, installID, email ? String(email).slice(0, 320) : null, expires]
+      `INSERT INTO cheaty_sessions(session_id, install_id, email, mobile, trial_expires_at) VALUES($1,$2,$3,$4,$5) RETURNING *`,
+      [sessionID, installID, email ? String(email).slice(0, 320) : null, mobile ? String(mobile).slice(0, 32) : null, expires]
     );
     return created.rows[0];
   } catch (error) {

@@ -42,7 +42,7 @@ Subscribe to `payment.captured` and `order.paid`. Use the same secret in Razorpa
 
 ## API contract
 
-The macOS app calls `POST /api/entitlement` with `{ "install_id": "..." }`. The response is compatible with the app's entitlement client: `status` is `trial`, `paid`, or `expired`; `expiresAt` is the trial expiry; and `checkoutURL` points to the session-specific checkout page.
+The macOS app calls `POST /api/entitlement` with `{ "install_id": "..." }`. The response is compatible with the app's entitlement client: `status` is `trial`, `paid`, or `expired`; `expiresAt` is the trial expiry; `registrationRequired` indicates whether email and mobile registration is incomplete; and `checkoutURL` points to the session-specific checkout page. Registration is submitted to `POST /api/session` with `install_id`, `email`, and `mobile`.
 
 ## Run the backend locally
 

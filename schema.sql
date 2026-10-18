@@ -2,6 +2,7 @@ CREATE TABLE IF NOT EXISTS cheaty_sessions (
   session_id UUID PRIMARY KEY,
   install_id TEXT NOT NULL UNIQUE,
   email TEXT,
+  mobile TEXT,
   status TEXT NOT NULL DEFAULT 'trial' CHECK (status IN ('trial', 'paid', 'expired')),
   trial_expires_at TIMESTAMPTZ NOT NULL,
   razorpay_order_id TEXT UNIQUE,
