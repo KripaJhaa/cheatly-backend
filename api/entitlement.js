@@ -1,4 +1,4 @@
-import { database, ensureSchema, readJSON, send, checkoutURL } from './_lib.js';
+import { database, ensureSchema, readJSON, send, checkoutURL, getOrCreateSession } from './_lib.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return send(res, 405, { error: 'Method not allowed' });
@@ -7,14 +7,7 @@ export default async function handler(req, res) {
     const installID = String(body.install_id || body.installID || '').trim();
     if (installID.length < 8 || installID.length > 180) return send(res, 400, { error: 'A valid install_id is required' });
     await ensureSchema();
-    const result = await database().query('SELECT * FROM cheaty_sessions WHERE install_id=$1', [installID]);
-    let row = result.rows[0];
-    if (!row) {
-      const created = await fetch(`${new URL('/api/session', `https://${process.env.VERCEL_URL || 'api.cheatly.pro'}`).origin}/api/session`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ install_id: installID }) });
-      if (!created.ok) return send(res, 503, { error: 'Could not start trial' });
-      const session = await created.json();
-      row = (await database().query('SELECT * FROM cheaty_sessions WHERE session_id=$1', [session.session_id])).rows[0];
-    }
+    let row = await getOrCreateSession(installID);
     const expired = row.status !== 'paid' && new Date(row.trial_expires_at) <= new Date();
     if (expired && row.status !== 'expired') {
       row = (await database().query(`UPDATE cheaty_sessions SET status='expired', updated_at=NOW() WHERE session_id=$1 RETURNING *`, [row.session_id])).rows[0];

@@ -66,6 +66,25 @@ export function trialDays() {
   return Number.isFinite(days) && days > 0 ? Math.min(days, 30) : 7;
 }
 
+export async function getOrCreateSession(installID, email = null) {
+  await ensureSchema();
+  const existing = await database().query('SELECT * FROM cheaty_sessions WHERE install_id=$1', [installID]);
+  if (existing.rows[0]) return existing.rows[0];
+  const sessionID = crypto.randomUUID();
+  const expires = new Date(Date.now() + trialDays() * 86400000);
+  try {
+    const created = await database().query(
+      `INSERT INTO cheaty_sessions(session_id, install_id, email, trial_expires_at) VALUES($1,$2,$3,$4) RETURNING *`,
+      [sessionID, installID, email ? String(email).slice(0, 320) : null, expires]
+    );
+    return created.rows[0];
+  } catch (error) {
+    // Two first launches can race; return the session created by the winner.
+    if (error.code !== '23505') throw error;
+    return (await database().query('SELECT * FROM cheaty_sessions WHERE install_id=$1', [installID])).rows[0];
+  }
+}
+
 export function pricePaise() {
   const amount = Number(process.env.PRICE_PAISE || 200000);
   return Number.isInteger(amount) && amount > 0 ? amount : 200000;
