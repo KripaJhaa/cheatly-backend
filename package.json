@@ -1,0 +1,12 @@
+{
+  "name": "cheatly-entitlements",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vercel dev",
+    "deploy": "vercel --prod"
+  },
+  "dependencies": {
+    "pg": "^8.13.1"
+  }
+}
