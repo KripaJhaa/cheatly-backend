@@ -44,6 +44,25 @@ Subscribe to `payment.captured` and `order.paid`. Use the same secret in Razorpa
 
 The macOS app calls `POST /api/entitlement` with `{ "install_id": "..." }`. The response is compatible with the app's entitlement client: `status` is `trial`, `paid`, or `expired`; `expiresAt` is the trial expiry; and `checkoutURL` points to the session-specific checkout page.
 
+## Run the backend locally
+
+Link this directory to the Vercel project and pull Development variables into the ignored local file:
+
+```bash
+npx vercel link
+npx vercel env pull .env.local
+npx vercel dev
+```
+
+The local API runs at `http://localhost:3000`. The macOS app can use it for an end-to-end local check:
+
+```bash
+CHEATLY_API_BASE_URL=http://localhost:3000 \
+  swift run Cheatly
+```
+
+For local payment testing, use Razorpay Test Mode credentials in the Vercel Development environment. Do not use Live credentials against a local test session.
+
 ## Validate the deployment
 
 After deploying, open `GET /api/health`. A healthy response looks like:
