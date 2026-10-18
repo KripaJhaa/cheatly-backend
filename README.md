@@ -44,4 +44,29 @@ Subscribe to `payment.captured` and `order.paid`. Use the same secret in Razorpa
 
 The macOS app calls `POST /api/entitlement` with `{ "install_id": "..." }`. The response is compatible with the app's entitlement client: `status` is `trial`, `paid`, or `expired`; `expiresAt` is the trial expiry; and `checkoutURL` points to the session-specific checkout page.
 
+## Validate the deployment
+
+After deploying, open `GET /api/health`. A healthy response looks like:
+
+```json
+{
+  "ok": true,
+  "database": "connected",
+  "razorpayKey": true,
+  "razorpaySecret": true,
+  "webhookSecret": true,
+  "checkoutURL": true
+}
+```
+
+Then send a test entitlement request:
+
+```bash
+curl -i -X POST https://api.cheatly.pro/api/entitlement \
+  -H 'content-type: application/json' \
+  -d '{"install_id":"local-test-install-001"}'
+```
+
+The first request should return `status: "trial"` and a session-specific `checkoutURL`. Repeating it with the same install ID should return the same trial session. Use Razorpay Test Mode before testing a real payment.
+
 Never put `RAZORPAY_KEY_SECRET`, the webhook secret, or database credentials in the website or macOS app. The public Razorpay key ID is the only payment credential exposed to checkout.js.
