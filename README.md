@@ -2,6 +2,18 @@
 
 This is an independent Vercel project. It creates a trial session, creates a Razorpay order for that session, verifies payments, receives Razorpay webhooks, and returns the entitlement used by the macOS app.
 
+## Endpoints
+
+### Early-access interest
+
+`POST /api/interest` stores an email and optional mobile number in `cheaty_interest_leads`. It is intended for the public website while the installer is distributed manually by email. Submitting the same email again updates the existing lead instead of creating a duplicate.
+
+Example body:
+
+```json
+{"email":"person@example.com","mobile":"+91 98765 43210"}
+```
+
 ## Deploy
 
 From this directory:
