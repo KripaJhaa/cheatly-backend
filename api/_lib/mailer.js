@@ -60,8 +60,10 @@ export async function notifyInterest({ email, mobile }) {
   if (!mailer) return { customerSent: false, adminSent: false, configured: false };
 
   const siteURL = process.env.CHEATLY_SITE_URL || 'https://cheatly.pro';
+  const tncURL = process.env.CHEATLY_TNC_URL || `${siteURL}/tnc`;
+  const downloadURL = String(process.env.CHEATLY_DOWNLOAD_URL || '').trim();
   const templates = getEmailTemplates();
-  const customerMessage = { to: email, ...templates.customer({ email, siteURL }) };
+  const customerMessage = { to: email, ...templates.customer({ email, siteURL, downloadURL, tncURL }) };
   await mailer.send(customerMessage);
 
   let adminSent = false;
@@ -69,7 +71,7 @@ export async function notifyInterest({ email, mobile }) {
   if (adminEmail) {
     await mailer.send({
       to: adminEmail,
-      ...templates.admin({ email, mobile, siteURL })
+      ...templates.admin({ email, mobile, siteURL, tncURL })
     });
     adminSent = true;
   }
