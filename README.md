@@ -8,7 +8,7 @@ This is an independent Vercel project. It creates a trial session, creates a Raz
 
 `POST /api/interest` stores an email and optional mobile number in `cheaty_interest_leads`. It is intended for the public website while the installer is distributed manually by email. Submitting the same email again updates the existing lead instead of creating a duplicate.
 
-The endpoint allows browser requests from `https://cheatly.pro`, `https://www.cheatly.pro`, and `localhost`/`127.0.0.1` on any port. Set `CORS_ORIGINS` in Vercel if another trusted frontend origin needs access.
+The endpoint reads its browser allowlist from the `CORS_ORIGINS` environment variable. Use comma-separated exact origins; do not put this list in frontend code. Configure it separately for each Vercel environment.
 
 Example body:
 
@@ -30,6 +30,7 @@ npx vercel env add RAZORPAY_KEY_SECRET production
 npx vercel env add RAZORPAY_WEBHOOK_SECRET production
 npx vercel env add PUBLIC_BASE_URL production
 npx vercel env add CHECKOUT_PAGE_URL production
+npx vercel env add CORS_ORIGINS production
 npx vercel --prod
 ```
 
@@ -38,9 +39,18 @@ Recommended values:
 ```text
 PUBLIC_BASE_URL=https://api.cheatly.pro
 CHECKOUT_PAGE_URL=https://api.cheatly.pro/checkout.html
+CORS_ORIGINS=https://cheatly.pro,https://www.cheatly.pro
 TRIAL_DAYS=7
 PRICE_PAISE=200000
 ```
+
+For Vercel Development, use the exact port where your local website runs, for example:
+
+```text
+CORS_ORIGINS=http://localhost:3000,http://localhost:8080,http://127.0.0.1:3000,http://127.0.0.1:8080
+```
+
+For a Vercel Preview deployment, add its preview URL as another exact origin in the Preview value. After changing an environment variable, redeploy; existing deployments do not automatically receive new environment values.
 
 Connect a Vercel Postgres/Neon database and use its `POSTGRES_URL`. The schema is created automatically on the first request; `schema.sql` is also included for manual setup.
 

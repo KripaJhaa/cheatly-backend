@@ -51,10 +51,9 @@ export function send(res, status, body) {
 
 export function applyCors(req, res) {
   const origin = String(req.headers.origin || '');
-  const configured = String(process.env.CORS_ORIGINS || 'https://cheatly.pro,https://www.cheatly.pro')
+  const configured = String(process.env.CORS_ORIGINS || '')
     .split(',').map((value) => value.trim()).filter(Boolean);
-  const isLocalhost = /^https?:\/\/localhost(?::\d+)?$/.test(origin) || /^https?:\/\/127\.0\.0\.1(?::\d+)?$/.test(origin);
-  if (configured.includes(origin) || isLocalhost) res.setHeader('Access-Control-Allow-Origin', origin);
+  if (configured.includes(origin)) res.setHeader('Access-Control-Allow-Origin', origin);
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   res.setHeader('Vary', 'Origin');
