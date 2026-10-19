@@ -16,6 +16,20 @@ Example body:
 {"email":"person@example.com","mobile":"+91 98765 43210"}
 ```
 
+### Email notifications
+
+The interest endpoint uses a provider adapter selected by `MAIL_PROVIDER`. Resend is currently implemented; the endpoint does not contain provider-specific calls. Configure these Vercel environment variables to send a confirmation to the customer and, optionally, a notification to the owner:
+
+```text
+MAIL_PROVIDER=resend
+RESEND_API_KEY=your-server-side-key
+EMAIL_FROM=Cheatly <hello@cheatly.pro>
+ADMIN_EMAIL=owner@example.com
+INTEREST_EMAIL_SUBJECT=You’re on the Cheatly early-access list
+```
+
+If email configuration is absent or temporarily fails, the lead is still saved and the API response reports `email_sent: false`. This prevents a mail-provider outage from losing an interested customer.
+
 ## Deploy
 
 From this directory:
