@@ -1,4 +1,4 @@
-import { interestAdminNotification, interestConfirmation } from './email-templates.js';
+import { getEmailTemplates } from './email-templates/index.js';
 
 class Mailer {
   async send() {
@@ -60,7 +60,8 @@ export async function notifyInterest({ email, mobile }) {
   if (!mailer) return { customerSent: false, adminSent: false, configured: false };
 
   const siteURL = process.env.CHEATLY_SITE_URL || 'https://cheatly.pro';
-  const customerMessage = { to: email, ...interestConfirmation({ email, siteURL }) };
+  const templates = getEmailTemplates();
+  const customerMessage = { to: email, ...templates.customer({ email, siteURL }) };
   await mailer.send(customerMessage);
 
   let adminSent = false;
@@ -68,7 +69,7 @@ export async function notifyInterest({ email, mobile }) {
   if (adminEmail) {
     await mailer.send({
       to: adminEmail,
-      ...interestAdminNotification({ email, mobile, siteURL })
+      ...templates.admin({ email, mobile, siteURL })
     });
     adminSent = true;
   }

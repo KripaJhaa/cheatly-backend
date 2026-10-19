@@ -29,7 +29,11 @@ ADMIN_EMAIL=owner@example.com
 INTEREST_EMAIL_SUBJECT=You’re on the Cheatly early-access list
 INTEREST_ADMIN_SUBJECT=New Cheatly early-access signup
 CHEATLY_SITE_URL=https://cheatly.pro
+INTEREST_CUSTOMER_TEMPLATE=early-access-v1
+INTEREST_ADMIN_TEMPLATE=early-access-v1
 ```
+
+Email copy is versioned under `api/_lib/email-templates/`. To introduce a new customer communication tomorrow, add a new file such as `early-access-v2.js`, export `customer` and `admin` functions, register it in `api/_lib/email-templates/index.js`, and change the corresponding Vercel template variable. The endpoint and mail provider do not need to change.
 
 If email configuration is absent or temporarily fails, the lead is still saved and the API response reports `email_sent: false`. This prevents a mail-provider outage from losing an interested customer.
 
