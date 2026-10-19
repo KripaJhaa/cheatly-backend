@@ -1,3 +1,5 @@
+import { interestAdminNotification, interestConfirmation } from './email-templates.js';
+
 class Mailer {
   async send() {
     throw new Error('Mailer.send must be implemented by a provider');
@@ -5,20 +7,23 @@ class Mailer {
 }
 
 class ResendMailer extends Mailer {
-  constructor({ apiKey, from }) {
+  constructor({ apiKey, from, replyTo }) {
     super();
     this.apiKey = apiKey;
     this.from = from;
+    this.replyTo = replyTo;
   }
 
   async send({ to, subject, html, text }) {
+    const payload = { from: this.from, to: [to], subject, html, text };
+    if (this.replyTo) payload.reply_to = this.replyTo;
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${this.apiKey}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ from: this.from, to: [to], subject, html, text })
+      body: JSON.stringify(payload)
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data?.message || data?.name || `Email provider failed (${response.status})`);
@@ -47,22 +52,15 @@ export function createMailer() {
   if (!providerName) return null;
   const provider = providers[providerName];
   if (!provider) throw new Error(`Unsupported MAIL_PROVIDER: ${providerName}`);
-  return provider({ apiKey: required('RESEND_API_KEY'), from: required('EMAIL_FROM') });
+  return provider({ apiKey: required('RESEND_API_KEY'), from: required('EMAIL_FROM'), replyTo: process.env.EMAIL_REPLY_TO });
 }
 
 export async function notifyInterest({ email, mobile }) {
   const mailer = createMailer();
   if (!mailer) return { customerSent: false, adminSent: false, configured: false };
 
-  const safeEmail = escapeHTML(email);
-  const safeMobile = escapeHTML(mobile || 'Not provided');
-  const subject = process.env.INTEREST_EMAIL_SUBJECT || 'You’re on the Cheatly early-access list';
-  const customerMessage = {
-    to: email,
-    subject,
-    text: `Thanks for joining the Cheatly early-access list. We’ll email you when the installer is ready.`,
-    html: `<div style="font-family:Arial,sans-serif;line-height:1.6;color:#172622"><h2>You’re on the Cheatly list.</h2><p>Thanks for your interest. We’ll email <strong>${safeEmail}</strong> when the installer and setup instructions are ready.</p><p>No payment is required right now.</p></div>`
-  };
+  const siteURL = process.env.CHEATLY_SITE_URL || 'https://cheatly.pro';
+  const customerMessage = { to: email, ...interestConfirmation({ email, siteURL }) };
   await mailer.send(customerMessage);
 
   let adminSent = false;
@@ -70,9 +68,7 @@ export async function notifyInterest({ email, mobile }) {
   if (adminEmail) {
     await mailer.send({
       to: adminEmail,
-      subject: `New Cheatly early-access lead: ${email}`,
-      text: `New early-access lead\nEmail: ${email}\nMobile: ${mobile || 'Not provided'}`,
-      html: `<div style="font-family:Arial,sans-serif;line-height:1.6"><h2>New Cheatly early-access lead</h2><p><strong>Email:</strong> ${safeEmail}</p><p><strong>Mobile:</strong> ${safeMobile}</p></div>`
+      ...interestAdminNotification({ email, mobile, siteURL })
     });
     adminSent = true;
   }

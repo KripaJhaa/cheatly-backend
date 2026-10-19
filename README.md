@@ -24,8 +24,11 @@ The interest endpoint uses a provider adapter selected by `MAIL_PROVIDER`. Resen
 MAIL_PROVIDER=resend
 RESEND_API_KEY=your-server-side-key
 EMAIL_FROM=Cheatly <hello@cheatly.pro>
+EMAIL_REPLY_TO=owner@example.com
 ADMIN_EMAIL=owner@example.com
 INTEREST_EMAIL_SUBJECT=You’re on the Cheatly early-access list
+INTEREST_ADMIN_SUBJECT=New Cheatly early-access signup
+CHEATLY_SITE_URL=https://cheatly.pro
 ```
 
 If email configuration is absent or temporarily fails, the lead is still saved and the API response reports `email_sent: false`. This prevents a mail-provider outage from losing an interested customer.
