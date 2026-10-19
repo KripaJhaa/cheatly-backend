@@ -31,6 +31,7 @@ INTEREST_ADMIN_SUBJECT=New Cheatly early-access signup
 CHEATLY_SITE_URL=https://cheatly.pro
 CHEATLY_TNC_URL=https://cheatly.pro/tnc
 CHEATLY_DOWNLOAD_URL=https://your-download-host.example/cheatly-installer.zip
+CHEATLY_LOGO_URL=https://cheatly.pro/cheatly.png
 INTEREST_CUSTOMER_TEMPLATE=early-access-v1
 INTEREST_ADMIN_TEMPLATE=early-access-v1
 ```
