@@ -8,6 +8,8 @@ This is an independent Vercel project. It creates a trial session, creates a Raz
 
 `POST /api/interest` stores an email and optional mobile number in `cheaty_interest_leads`. It is intended for the public website while the installer is distributed manually by email. Submitting the same email again updates the existing lead instead of creating a duplicate.
 
+The endpoint allows browser requests from `https://cheatly.pro`, `https://www.cheatly.pro`, and `localhost`/`127.0.0.1` on any port. Set `CORS_ORIGINS` in Vercel if another trusted frontend origin needs access.
+
 Example body:
 
 ```json

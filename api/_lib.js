@@ -49,6 +49,17 @@ export function send(res, status, body) {
   res.status(status).setHeader('Content-Type', 'application/json; charset=utf-8').end(JSON.stringify(body));
 }
 
+export function applyCors(req, res) {
+  const origin = String(req.headers.origin || '');
+  const configured = String(process.env.CORS_ORIGINS || 'https://cheatly.pro,https://www.cheatly.pro')
+    .split(',').map((value) => value.trim()).filter(Boolean);
+  const isLocalhost = /^https?:\/\/localhost(?::\d+)?$/.test(origin) || /^https?:\/\/127\.0\.0\.1(?::\d+)?$/.test(origin);
+  if (configured.includes(origin) || isLocalhost) res.setHeader('Access-Control-Allow-Origin', origin);
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Vary', 'Origin');
+}
+
 export async function readJSON(req) {
   if (req.body && typeof req.body === 'object') return req.body;
   const chunks = [];
