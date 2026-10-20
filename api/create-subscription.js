@@ -8,7 +8,7 @@ export default async function handler(req, res) {
     const sessionID = String(body.session_id || '').trim();
     const planKey = String(body.plan_key || 'monthly').trim().toLowerCase();
     const plan = planDefinition(planKey);
-    if (!sessionID || !plan) return send(res, 400, { error: 'A valid session and configured plan are required' });
+    if (!sessionID || !plan || plan.kind !== 'subscription') return send(res, 400, { error: 'A valid subscription plan is required' });
     await ensureSchema();
     const session = (await database().query('SELECT * FROM cheaty_sessions WHERE session_id=$1', [sessionID])).rows[0];
     if (!session) return send(res, 404, { error: 'Session not found' });

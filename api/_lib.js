@@ -158,11 +158,24 @@ export function planDefinitions() {
       name: 'Cheatly Annual',
       description: 'Private workspace access, billed yearly.',
       interval: 'annual',
+      kind: 'subscription',
       amountPaise: Number(process.env.ANNUAL_PRICE_PAISE || 299000),
       razorpayPlanID: process.env.RAZORPAY_PLAN_ANNUAL || ''
     }
   ];
-  return plans.filter((plan) => plan.razorpayPlanID && Number.isInteger(plan.amountPaise) && plan.amountPaise > 0);
+  plans[0].kind = 'subscription';
+  const lifetime = {
+    key: 'lifetime',
+    name: 'Cheatly Lifetime',
+    description: 'One-time purchase with lifetime access.',
+    interval: 'lifetime',
+    kind: 'one_time',
+    amountPaise: Number(process.env.LIFETIME_PRICE_PAISE || process.env.PRICE_PAISE || 200000),
+    razorpayPlanID: ''
+  };
+  const recurring = plans.filter((plan) => plan.razorpayPlanID && Number.isInteger(plan.amountPaise) && plan.amountPaise > 0);
+  const lifetimeEnabled = process.env.LIFETIME_ENABLED !== 'false' && Number.isInteger(lifetime.amountPaise) && lifetime.amountPaise > 0;
+  return lifetimeEnabled ? [...recurring, lifetime] : recurring;
 }
 
 export function planDefinition(planKey) {
@@ -233,7 +246,7 @@ export async function ensureLicenseForSession(session) {
 }
 
 export function pricePaise() {
-  const amount = Number(process.env.PRICE_PAISE || 200000);
+  const amount = Number(process.env.LIFETIME_PRICE_PAISE || process.env.PRICE_PAISE || 200000);
   return Number.isInteger(amount) && amount > 0 ? amount : 200000;
 }
 
@@ -271,11 +284,31 @@ export async function razorpay(path, options = {}) {
 
 export async function markOrderPaid(orderID, paymentID = null) {
   await ensureSchema();
-  const result = await database().query(
-    `UPDATE cheaty_sessions SET status='paid', paid_until=NULL, razorpay_payment_id=COALESCE($2, razorpay_payment_id), updated_at=NOW()
-     WHERE razorpay_order_id=$1 RETURNING session_id`, [orderID, paymentID]
-  );
-  return result.rows[0] || null;
+  const db = database();
+  const session = (await db.query('SELECT * FROM cheaty_sessions WHERE razorpay_order_id=$1', [orderID])).rows[0];
+  if (!session) return null;
+  await db.query('BEGIN');
+  try {
+    await db.query(
+      `UPDATE cheaty_sessions SET status='paid', paid_until=NULL, plan_key='lifetime', razorpay_payment_id=COALESCE($2, razorpay_payment_id), updated_at=NOW()
+       WHERE session_id=$1`, [session.session_id, paymentID]
+    );
+    await db.query(
+      `UPDATE cheaty_licenses SET status='paid', paid_until=NULL, updated_at=NOW() WHERE session_id=$1`, [session.session_id]
+    );
+    if (paymentID && session.customer_id) {
+      await db.query(
+        `INSERT INTO cheaty_payments(payment_record_id, customer_id, session_id, razorpay_payment_id, razorpay_order_id, amount_paise, status, event_name)
+         VALUES($1,$2,$3,$4,$5,$6,'captured','payment.captured') ON CONFLICT(razorpay_payment_id) DO NOTHING`,
+        [crypto.randomUUID(), session.customer_id, session.session_id, paymentID, orderID, pricePaise()]
+      );
+    }
+    await db.query('COMMIT');
+  } catch (error) {
+    await db.query('ROLLBACK');
+    throw error;
+  }
+  return { sessionID: session.session_id };
 }
 
 export async function activateSubscription(subscriptionID, paymentID = null, eventName = 'subscription.charged') {

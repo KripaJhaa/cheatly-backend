@@ -34,7 +34,7 @@
           <h2>${plan.name}</h2>
           <p>${plan.description}</p>
           <strong>${money(plan.amountPaise)} <span class="small">/ ${plan.interval === 'annual' ? 'year' : 'month'}</span></strong>
-          <button data-plan="${plan.key}">Choose ${plan.interval === 'annual' ? 'annual' : 'monthly'}</button>
+          <button data-plan="${plan.key}">Choose ${plan.interval === 'annual' ? 'annual' : plan.interval === 'lifetime' ? 'lifetime' : 'monthly'}</button>
         </article>`).join('');
       plansElement.querySelectorAll('button').forEach((button) => button.addEventListener('click', () => subscribe(button.dataset.plan, button)));
     }
@@ -44,12 +44,19 @@
       button.disabled = true;
       message.textContent = 'Preparing secure checkout…';
       try {
-        const response = await fetch('/api/create-subscription', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ session_id: sessionID, plan_key: planKey }) });
-        const subscription = await response.json();
-        if (!response.ok || !subscription.subscription_id) throw new Error(subscription.error || 'Could not prepare subscription');
         const selected = config.plans.find((plan) => plan.key === planKey);
-        const checkout = new Razorpay({ key: subscription.key_id, subscription_id: subscription.subscription_id, name: config.name, description: selected?.description || config.description, prefill: {}, theme: { color: '#34775e' }, handler: async (result) => {
-          const verified = await (await fetch('/api/verify-subscription', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({...result, session_id: sessionID}) })).json();
+        const endpoint = selected?.kind === 'one_time' ? '/api/create-order' : '/api/create-subscription';
+        const response = await fetch(endpoint, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ session_id: sessionID, plan_key: planKey }) });
+        const payment = await response.json();
+        if (!response.ok) throw new Error(payment.error || 'Could not prepare payment');
+        if (selected?.kind === 'one_time' && !payment.order_id) throw new Error('Could not prepare lifetime payment');
+        if (selected?.kind !== 'one_time' && !payment.subscription_id) throw new Error('Could not prepare subscription');
+        const options = selected?.kind === 'one_time'
+          ? { key: config.keyID, amount: payment.amount, currency: payment.currency, order_id: payment.order_id }
+          : { key: payment.key_id, subscription_id: payment.subscription_id };
+        const verifyEndpoint = selected?.kind === 'one_time' ? '/api/verify-payment' : '/api/verify-subscription';
+        const checkout = new Razorpay({ ...options, name: config.name, description: selected?.description || config.description, prefill: {}, theme: { color: '#34775e' }, handler: async (result) => {
+          const verified = await (await fetch(verifyEndpoint, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({...result, session_id: sessionID}) })).json();
           message.textContent = verified.message || 'Your payment is being confirmed.';
           if (verified.status === 'paid') plansElement.innerHTML = `<p>Your paid access is active. <a href="/profile.html?session_id=${encodeURIComponent(sessionID)}">View your profile →</a></p>`;
         }});
