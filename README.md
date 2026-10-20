@@ -29,6 +29,7 @@ ADMIN_EMAIL=owner@example.com
 INTEREST_EMAIL_SUBJECT=You’re on the Cheatly early-access list
 INTEREST_ADMIN_SUBJECT=New Cheatly early-access signup
 CHEATLY_SITE_URL=https://cheatly.pro
+CHEATLY_INSTALL_URL=https://cheatly.pro/install/
 CHEATLY_TNC_URL=https://cheatly.pro/tnc
 # Do not use a public installer link for paid delivery.
 ARTIFACT_PROVIDER=r2

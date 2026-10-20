@@ -88,6 +88,7 @@ export async function notifyPaidAccess({ sessionID, planName }) {
   if (!delivery) return { sent: false, configured: true, reason: 'artifact_not_configured_or_token_exists' };
   const siteURL = process.env.CHEATLY_SITE_URL || 'https://cheatly.pro';
   const tncURL = process.env.CHEATLY_TNC_URL || `${siteURL}/tnc`;
+  const installURL = process.env.CHEATLY_INSTALL_URL || `${siteURL}/install/`;
   const logoURL = process.env.CHEATLY_LOGO_URL || `${siteURL}/cheatly.png`;
   const template = getPaidAccessTemplate();
   try {
@@ -100,6 +101,7 @@ export async function notifyPaidAccess({ sessionID, planName }) {
         planName,
         releaseVersion: process.env.CHEATLY_RELEASE_VERSION || 'current release',
         siteURL,
+        installURL,
         tncURL,
         logoURL
       })
