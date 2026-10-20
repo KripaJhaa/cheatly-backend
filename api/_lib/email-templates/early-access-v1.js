@@ -1,8 +1,10 @@
 import { escapeHTML, layout } from './shared.js';
 
-export function customer({ email, siteURL, downloadURL, tncURL, logoURL }) {
+export function customer({ email, siteURL, installURL, downloadURL, purchaseURL, tncURL, logoURL }) {
   const safeEmail = escapeHTML(email);
   const safeSiteURL = escapeHTML(siteURL);
+  const safeInstallURL = escapeHTML(installURL || `${siteURL}/install/`);
+  const safePurchaseURL = escapeHTML(purchaseURL || `${siteURL}/#access`);
   const safeDownloadURL = escapeHTML(downloadURL || '');
   const safeTncURL = escapeHTML(tncURL);
   const deliveryBlock = downloadURL
@@ -10,14 +12,14 @@ export function customer({ email, siteURL, downloadURL, tncURL, logoURL }) {
     : `<p style="margin:0;color:#5f7068;font-size:14px;line-height:1.65">Your installer link will be added here once delivery is enabled.</p>`;
   return {
     subject: process.env.INTEREST_EMAIL_SUBJECT || 'You’re on the list — Cheatly early access',
-    text: `You’re on the Cheatly early-access list. Thanks for your interest. ${downloadURL ? `Your 7-day trial installer is ready: ${downloadURL}. This private link can be used once.` : 'We’ll email you when the installer and setup instructions are ready.'} No payment is required right now. Terms: ${tncURL}. Visit ${siteURL} to learn more.`,
+    text: `You’re on the Cheatly early-access list. Thanks for your interest. ${downloadURL ? `Your 7-day trial installer is ready: ${downloadURL}. This private link can be used once.` : 'We’ll email you when the installer and setup instructions are ready.'} Start paid access before or after the trial here: ${purchaseURL}. Terms: ${tncURL}. Visit ${siteURL} to learn more.`,
     html: layout({
       preheader: 'Your Cheatly early-access request is confirmed.',
       eyebrow: 'Early access confirmed',
       title: 'You’re on the list.',
       body: `<p style="margin:0 0 22px;color:#5f7068;font-size:16px;line-height:1.65">Thanks for your interest in Cheatly. We’ve saved <strong style="color:#172622">${safeEmail}</strong> for early access.</p>
         <div style="margin:0 0 24px;padding:18px 20px;border-radius:10px;background:#edf4e9"><p style="margin:0 0 10px;color:#458067;font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase">What happens next</p><p style="margin:0;color:#5f7068;font-size:14px;line-height:1.65">Your early-access trial is available now. The app checks your access online while the 7-day trial is active. After it expires, Cheatly will show the plan page. <strong style="color:#172622">No payment is required right now.</strong></p></div>
-        ${deliveryBlock}<span style="display:inline-block;width:8px"></span><a href="${safeSiteURL}" style="display:inline-block;padding:13px 18px;border-radius:7px;border:1px solid #458067;color:#458067;text-decoration:none;font-size:13px;font-weight:700">Explore Cheatly →</a>`,
+        ${deliveryBlock}<span style="display:inline-block;width:8px"></span><a href="${safeInstallURL}" style="display:inline-block;padding:13px 18px;border-radius:7px;border:1px solid #458067;color:#458067;text-decoration:none;font-size:13px;font-weight:700">How to install →</a><p style="margin:18px 0 0"><a href="${safePurchaseURL}" style="display:inline-block;padding:13px 18px;border-radius:7px;background:#172622;color:#fffdf8;text-decoration:none;font-size:13px;font-weight:700">Choose a plan →</a></p><p style="margin:18px 0 0"><a href="${safeSiteURL}" style="color:#458067;font-size:13px;font-weight:700">Explore Cheatly →</a></p>`,
       footer: `You received this because you joined the Cheatly early-access list. We’ll only use this address for access updates and delivery communication.<br><br><a href="${safeTncURL}" style="color:#458067">Terms &amp; Conditions</a>`,
       logoURL
     })

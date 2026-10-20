@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { getEmailTemplates, getPaidAccessTemplate } from './email-templates/index.js';
-import { downloadURL as buildDownloadURL, ensureLicenseForSession, getOrCreateSession, issueDownloadToken, revokeDownloadToken } from '../_lib.js';
+import { checkoutURL, downloadURL as buildDownloadURL, ensureLicenseForSession, getOrCreateSession, issueDownloadToken, revokeDownloadToken } from '../_lib.js';
 
 class Mailer {
   async send() {
@@ -62,15 +62,17 @@ export async function notifyInterest({ email, mobile }) {
   if (!mailer) return { customerSent: false, adminSent: false, configured: false };
 
   const siteURL = process.env.CHEATLY_SITE_URL || 'https://cheatly.pro';
+  const installURL = process.env.CHEATLY_INSTALL_URL || `${siteURL}/install/`;
   const tncURL = process.env.CHEATLY_TNC_URL || `${siteURL}/tnc`;
   // Give each approved early-access customer a customer-bound, one-time trial installer link.
   const deliverySession = await getOrCreateSession(`early-access-${crypto.randomUUID()}`, email, mobile);
   await ensureLicenseForSession(deliverySession);
   const delivery = await issueDownloadToken(deliverySession.session_id, 'trial_installer');
   const downloadURL = delivery ? buildDownloadURL(delivery.token, 'trial_installer') : '';
+  const purchaseURL = checkoutURL(deliverySession.session_id);
   const logoURL = process.env.CHEATLY_LOGO_URL || `${siteURL}/cheatly.png`;
   const templates = getEmailTemplates();
-  const customerMessage = { to: email, ...templates.customer({ email, siteURL, downloadURL, tncURL, logoURL }) };
+  const customerMessage = { to: email, ...templates.customer({ email, siteURL, installURL, downloadURL, purchaseURL, tncURL, logoURL }) };
   try {
     await mailer.send(customerMessage);
   } catch (error) {
