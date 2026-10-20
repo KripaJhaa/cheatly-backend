@@ -59,7 +59,7 @@ The first paid version has a server-controlled trial and subscription model:
 
 - `POST /api/session` registers an email/mobile pair against an installation and starts or resumes its trial.
 - `POST /api/entitlement` is the macOS app's authoritative access check. `TRIAL_DAYS` controls the default trial length.
-- `GET /api/plans` returns the configured monthly and annual plans without exposing Razorpay secrets.
+- `GET /api/plans` returns the configured plans and public Razorpay key. `/api/config` is kept as a rewrite to this endpoint for the checkout page without deploying an additional serverless function.
 - `POST /api/create-subscription` creates a Razorpay Subscription for a session and plan.
 - `POST /api/verify-subscription` verifies the checkout callback. The webhook remains the source of truth.
 - `GET /api/profile?session_id=...` returns the current customer view and payment history for the first profile implementation.

@@ -1,1 +1,5 @@
-{}
+{
+  "rewrites": [
+    { "source": "/api/config", "destination": "/api/plans" }
+  ]
+}

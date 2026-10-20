@@ -5,6 +5,9 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(204).end();
   if (req.method !== 'GET') return send(res, 405, { error: 'Method not allowed' });
   return send(res, 200, {
+    keyID: process.env.RAZORPAY_KEY_ID || '',
+    name: 'Cheatly',
+    description: 'Cheatly private workspace access',
     plans: planDefinitions().map(({ razorpayPlanID, ...plan }) => plan)
   });
 }
