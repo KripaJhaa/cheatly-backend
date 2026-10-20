@@ -11,10 +11,13 @@ export default async function handler(req, res) {
     // Resolve the private source before consuming the customer token. A bad
     // storage configuration should not burn a valid customer delivery link.
     const artifactURL = await artifactSourceURL();
+    const upstream = await fetch(artifactURL, { redirect: 'follow' });
+    if (!upstream.ok || !upstream.body) {
+      console.error('Artifact fetch failed:', upstream.status, upstream.statusText);
+      return send(res, 502, { error: 'Installer could not be retrieved' });
+    }
     const delivery = await consumeDownloadToken(token, purpose);
     if (!delivery) return send(res, 410, { error: 'This download link has already been used or expired' });
-    const upstream = await fetch(artifactURL, { redirect: 'follow' });
-    if (!upstream.ok || !upstream.body) return send(res, 502, { error: 'Installer could not be retrieved' });
     res.statusCode = 200;
     res.setHeader('Cache-Control', 'no-store, private');
     res.setHeader('Content-Type', 'application/octet-stream');
