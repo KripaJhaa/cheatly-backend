@@ -1,5 +1,6 @@
+import crypto from 'node:crypto';
 import { getEmailTemplates, getPaidAccessTemplate } from './email-templates/index.js';
-import { downloadURL as buildDownloadURL, issueDownloadToken, revokeDownloadToken } from '../_lib.js';
+import { downloadURL as buildDownloadURL, ensureLicenseForSession, getOrCreateSession, issueDownloadToken, revokeDownloadToken } from '../_lib.js';
 
 class Mailer {
   async send() {
@@ -62,12 +63,20 @@ export async function notifyInterest({ email, mobile }) {
 
   const siteURL = process.env.CHEATLY_SITE_URL || 'https://cheatly.pro';
   const tncURL = process.env.CHEATLY_TNC_URL || `${siteURL}/tnc`;
-  // Early-access confirmation must never expose the paid installer artifact.
-  const downloadURL = '';
+  // Give each approved early-access customer a customer-bound, one-time trial installer link.
+  const deliverySession = await getOrCreateSession(`early-access-${crypto.randomUUID()}`, email, mobile);
+  await ensureLicenseForSession(deliverySession);
+  const delivery = await issueDownloadToken(deliverySession.session_id, 'trial_installer');
+  const downloadURL = delivery ? buildDownloadURL(delivery.token, 'trial_installer') : '';
   const logoURL = process.env.CHEATLY_LOGO_URL || `${siteURL}/cheatly.png`;
   const templates = getEmailTemplates();
   const customerMessage = { to: email, ...templates.customer({ email, siteURL, downloadURL, tncURL, logoURL }) };
-  await mailer.send(customerMessage);
+  try {
+    await mailer.send(customerMessage);
+  } catch (error) {
+    if (delivery) await revokeDownloadToken(delivery.token);
+    throw error;
+  }
 
   let adminSent = false;
   const adminEmail = String(process.env.ADMIN_EMAIL || '').trim();

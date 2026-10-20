@@ -213,8 +213,9 @@ export function downloadTokenHash(token) {
   return crypto.createHash('sha256').update(String(token)).digest('hex');
 }
 
-export function downloadURL(token) {
-  return appURL(`/api/download?token=${encodeURIComponent(token)}`);
+export function downloadURL(token, purpose = 'paid_installer') {
+  const suffix = purpose === 'paid_installer' ? '' : `&purpose=${encodeURIComponent(purpose)}`;
+  return appURL(`/api/download?token=${encodeURIComponent(token)}${suffix}`);
 }
 
 export async function issueDownloadToken(sessionID, purpose = 'paid_installer') {

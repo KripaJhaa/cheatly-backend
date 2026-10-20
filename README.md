@@ -6,7 +6,7 @@ This is an independent Vercel project. It creates a trial session, creates Razor
 
 ### Early-access interest
 
-`POST /api/interest` stores an email and optional mobile number in `cheaty_interest_leads`. It is intended for the public website while the installer is distributed manually by email. Submitting the same email again updates the existing lead instead of creating a duplicate.
+`POST /api/interest` stores an email and optional mobile number in `cheaty_interest_leads`. It creates a customer-bound, one-time trial installer delivery and emails the early-access customer a download link when the artifact provider is configured. Submitting the same email again updates the existing lead and sends a new one-time delivery for that customer.
 
 The endpoint reads its browser allowlist from the `CORS_ORIGINS` environment variable. Use comma-separated exact origins; do not put this list in frontend code. Configure it separately for each Vercel environment.
 
@@ -31,7 +31,7 @@ INTEREST_ADMIN_SUBJECT=New Cheatly early-access signup
 CHEATLY_SITE_URL=https://cheatly.pro
 CHEATLY_INSTALL_URL=https://cheatly.pro/install/
 CHEATLY_TNC_URL=https://cheatly.pro/tnc
-# Do not use a public installer link for paid delivery.
+# Keep the bucket private. Both trial and paid delivery use one-time backend links.
 ARTIFACT_PROVIDER=r2
 R2_ACCOUNT_ID=your_cloudflare_account_id
 R2_BUCKET=cheatly-releases
