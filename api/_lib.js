@@ -87,6 +87,18 @@ export async function ensureSchema() {
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
       CREATE INDEX IF NOT EXISTS cheaty_licenses_customer_idx ON cheaty_licenses(customer_id);
+      CREATE TABLE IF NOT EXISTS cheaty_download_tokens (
+        download_token_id UUID PRIMARY KEY,
+        token_hash TEXT NOT NULL UNIQUE,
+        customer_id UUID NOT NULL REFERENCES cheaty_customers(customer_id),
+        session_id UUID NOT NULL REFERENCES cheaty_sessions(session_id),
+        purpose TEXT NOT NULL DEFAULT 'paid_installer',
+        expires_at TIMESTAMPTZ NOT NULL,
+        used_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE(session_id, purpose)
+      );
+      CREATE INDEX IF NOT EXISTS cheaty_download_tokens_expiry_idx ON cheaty_download_tokens(expires_at);
       CREATE TABLE IF NOT EXISTS cheaty_interest_leads (
         lead_id UUID PRIMARY KEY,
         email TEXT NOT NULL UNIQUE,
@@ -190,6 +202,71 @@ export function addPlanInterval(date, interval) {
   const result = new Date(date);
   result.setUTCDate(result.getUTCDate() + (interval === 'annual' ? 365 : 30));
   return result;
+}
+
+export function downloadTokenTTLHours() {
+  const hours = Number(process.env.DOWNLOAD_LINK_TTL_HOURS || 72);
+  return Number.isFinite(hours) && hours > 0 ? Math.min(hours, 168) : 72;
+}
+
+export function downloadTokenHash(token) {
+  return crypto.createHash('sha256').update(String(token)).digest('hex');
+}
+
+export function downloadURL(token) {
+  return appURL(`/api/download?token=${encodeURIComponent(token)}`);
+}
+
+export async function issueDownloadToken(sessionID, purpose = 'paid_installer') {
+  await ensureSchema();
+  const session = (await database().query(
+    `SELECT s.*, c.email, c.customer_id AS linked_customer_id FROM cheaty_sessions s
+     JOIN cheaty_customers c ON c.customer_id=s.customer_id WHERE s.session_id=$1`, [sessionID]
+  )).rows[0];
+  const provider = String(process.env.ARTIFACT_PROVIDER || 'r2').trim().toLowerCase();
+  const artifactConfigured = provider === 'static'
+    ? Boolean(process.env.CHEATLY_ARTIFACT_URL)
+    : Boolean(process.env.R2_ACCOUNT_ID && process.env.R2_BUCKET && process.env.R2_OBJECT_KEY && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY);
+  if (!session || !session.email || !artifactConfigured) return null;
+  const token = crypto.randomBytes(32).toString('base64url');
+  const expiresAt = new Date(Date.now() + downloadTokenTTLHours() * 3600000);
+  const inserted = await database().query(
+    `INSERT INTO cheaty_download_tokens(download_token_id, token_hash, customer_id, session_id, purpose, expires_at)
+     VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(session_id, purpose) DO NOTHING RETURNING download_token_id`,
+    [crypto.randomUUID(), downloadTokenHash(token), session.customer_id, session.session_id, purpose, expiresAt]
+  );
+  if (!inserted.rows[0]) return null;
+  return { token, expiresAt, session };
+}
+
+export async function revokeDownloadToken(token) {
+  await ensureSchema();
+  await database().query('DELETE FROM cheaty_download_tokens WHERE token_hash=$1 AND used_at IS NULL', [downloadTokenHash(token)]);
+}
+
+export async function consumeDownloadToken(token, purpose = 'paid_installer') {
+  await ensureSchema();
+  const db = database();
+  await db.query('BEGIN');
+  try {
+    const result = await db.query(
+      `SELECT d.*, s.email, s.install_id FROM cheaty_download_tokens d
+       JOIN cheaty_sessions s ON s.session_id=d.session_id
+       WHERE d.token_hash=$1 AND d.purpose=$2 AND d.used_at IS NULL AND d.expires_at>NOW()
+       FOR UPDATE`, [downloadTokenHash(token), purpose]
+    );
+    const delivery = result.rows[0];
+    if (!delivery) {
+      await db.query('ROLLBACK');
+      return null;
+    }
+    await db.query('UPDATE cheaty_download_tokens SET used_at=NOW() WHERE download_token_id=$1', [delivery.download_token_id]);
+    await db.query('COMMIT');
+    return delivery;
+  } catch (error) {
+    await db.query('ROLLBACK');
+    throw error;
+  }
 }
 
 export async function getOrCreateCustomer(email, mobile = null) {

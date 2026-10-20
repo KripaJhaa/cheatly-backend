@@ -30,10 +30,21 @@ INTEREST_EMAIL_SUBJECT=You’re on the Cheatly early-access list
 INTEREST_ADMIN_SUBJECT=New Cheatly early-access signup
 CHEATLY_SITE_URL=https://cheatly.pro
 CHEATLY_TNC_URL=https://cheatly.pro/tnc
-CHEATLY_DOWNLOAD_URL=https://your-download-host.example/cheatly-installer.zip
+# Do not use a public installer link for paid delivery.
+ARTIFACT_PROVIDER=r2
+R2_ACCOUNT_ID=your_cloudflare_account_id
+R2_BUCKET=cheatly-releases
+R2_OBJECT_KEY=Cheatly.dmg
+R2_ACCESS_KEY_ID=your_r2_access_key
+R2_SECRET_ACCESS_KEY=your_r2_secret
+R2_SIGNED_URL_TTL_SECONDS=900
+CHEATLY_ARTIFACT_FILENAME=Cheatly.dmg
+DOWNLOAD_LINK_TTL_HOURS=72
 CHEATLY_LOGO_URL=https://cheatly.pro/cheatly.png
 INTEREST_CUSTOMER_TEMPLATE=early-access-v1
 INTEREST_ADMIN_TEMPLATE=early-access-v1
+PAID_ACCESS_TEMPLATE=paid-access-v1
+PAID_ACCESS_EMAIL_SUBJECT=Your Cheatly installer is ready
 ```
 
 Email copy is versioned under `api/_lib/email-templates/`. To introduce a new customer communication tomorrow, add a new file such as `early-access-v2.js`, export `customer` and `admin` functions, register it in `api/_lib/email-templates/index.js`, and change the corresponding Vercel template variable. The endpoint and mail provider do not need to change.
@@ -50,6 +61,7 @@ The first paid version has a server-controlled trial and subscription model:
 - `POST /api/create-subscription` creates a Razorpay Subscription for a session and plan.
 - `POST /api/verify-subscription` verifies the checkout callback. The webhook remains the source of truth.
 - `GET /api/profile?session_id=...` returns the current customer view and payment history for the first profile implementation.
+- `GET /api/download?token=...` consumes a customer-bound, expiring one-time installer token and streams the private artifact.
 
 The hosted profile view is available at `/profile.html?session_id=...`. The session ID is intentionally scoped to the customer session and should be replaced with a magic-link token before exposing profile links broadly.
 
@@ -64,7 +76,11 @@ SUBSCRIPTION_TOTAL_COUNT=120
 TRIAL_DAYS=7
 ```
 
-The database automatically creates customer, subscription, payment, and license records. Razorpay webhook events activate paid access and record recurring payments. Do not activate paid access based only on a browser redirect.
+The database automatically creates customer, subscription, payment, license, and download-token records. Razorpay webhook events activate paid access and record recurring payments. Do not activate paid access based only on a browser redirect.
+
+Paid delivery uses a private R2 object. The backend generates a short-lived R2 URL only when a valid Cheatly token is redeemed. The email contains a backend download URL, not the R2 source URL. The token is hashed in the database, bound to the paid session, expires according to `DOWNLOAD_LINK_TTL_HOURS`, and is invalidated on its first download attempt. A one-time email link cannot prevent a customer from forwarding it before use; it limits the link to one successful/attempted redemption and does not expose a reusable public installer URL.
+
+For local development, `ARTIFACT_PROVIDER=static` can be used with `CHEATLY_ARTIFACT_URL`. Production should use `ARTIFACT_PROVIDER=r2` and keep the R2 bucket private.
 
 ## Deploy
 

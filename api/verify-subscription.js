@@ -1,4 +1,5 @@
 import { database, ensureSchema, readJSON, safeEqual, send, subscriptionSignature, razorpay, activateSubscription } from './_lib.js';
+import { notifyPaidAccess } from './_lib/mailer.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return send(res, 405, { error: 'Method not allowed' });
@@ -17,6 +18,7 @@ export default async function handler(req, res) {
     const payment = await razorpay(`/payments/${encodeURIComponent(paymentID)}`);
     if (payment.status !== 'captured') return send(res, 202, { status: payment.status, message: 'Payment received but is not captured yet' });
     const activation = await activateSubscription(subscriptionID, paymentID, 'checkout.completed');
+    try { await notifyPaidAccess({ sessionID, planName: subscription.plan_key === 'annual' ? 'Cheatly Annual' : 'Cheatly Monthly' }); } catch (deliveryError) { console.error('Paid delivery email failed:', deliveryError); }
     return send(res, 200, { status: 'paid', expires_at: activation?.paidUntil || null, message: 'Paid access is active' });
   } catch (error) {
     console.error(error);

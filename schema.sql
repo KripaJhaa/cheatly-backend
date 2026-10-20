@@ -72,6 +72,20 @@ CREATE TABLE IF NOT EXISTS cheaty_licenses (
 
 CREATE INDEX IF NOT EXISTS cheaty_licenses_customer_idx ON cheaty_licenses(customer_id);
 
+CREATE TABLE IF NOT EXISTS cheaty_download_tokens (
+  download_token_id UUID PRIMARY KEY,
+  token_hash TEXT NOT NULL UNIQUE,
+  customer_id UUID NOT NULL REFERENCES cheaty_customers(customer_id),
+  session_id UUID NOT NULL REFERENCES cheaty_sessions(session_id),
+  purpose TEXT NOT NULL DEFAULT 'paid_installer',
+  expires_at TIMESTAMPTZ NOT NULL,
+  used_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(session_id, purpose)
+);
+
+CREATE INDEX IF NOT EXISTS cheaty_download_tokens_expiry_idx ON cheaty_download_tokens(expires_at);
+
 CREATE TABLE IF NOT EXISTS cheaty_interest_leads (
   lead_id UUID PRIMARY KEY,
   email TEXT NOT NULL UNIQUE,

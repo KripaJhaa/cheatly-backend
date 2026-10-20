@@ -1,4 +1,5 @@
-import { getEmailTemplates } from './email-templates/index.js';
+import { getEmailTemplates, getPaidAccessTemplate } from './email-templates/index.js';
+import { downloadURL as buildDownloadURL, issueDownloadToken, revokeDownloadToken } from '../_lib.js';
 
 class Mailer {
   async send() {
@@ -61,7 +62,8 @@ export async function notifyInterest({ email, mobile }) {
 
   const siteURL = process.env.CHEATLY_SITE_URL || 'https://cheatly.pro';
   const tncURL = process.env.CHEATLY_TNC_URL || `${siteURL}/tnc`;
-  const downloadURL = String(process.env.CHEATLY_DOWNLOAD_URL || '').trim();
+  // Early-access confirmation must never expose the paid installer artifact.
+  const downloadURL = '';
   const logoURL = process.env.CHEATLY_LOGO_URL || `${siteURL}/cheatly.png`;
   const templates = getEmailTemplates();
   const customerMessage = { to: email, ...templates.customer({ email, siteURL, downloadURL, tncURL, logoURL }) };
@@ -77,4 +79,33 @@ export async function notifyInterest({ email, mobile }) {
     adminSent = true;
   }
   return { customerSent: true, adminSent, configured: true };
+}
+
+export async function notifyPaidAccess({ sessionID, planName }) {
+  const mailer = createMailer();
+  if (!mailer) return { sent: false, configured: false };
+  const delivery = await issueDownloadToken(sessionID);
+  if (!delivery) return { sent: false, configured: true, reason: 'artifact_not_configured_or_token_exists' };
+  const siteURL = process.env.CHEATLY_SITE_URL || 'https://cheatly.pro';
+  const tncURL = process.env.CHEATLY_TNC_URL || `${siteURL}/tnc`;
+  const logoURL = process.env.CHEATLY_LOGO_URL || `${siteURL}/cheatly.png`;
+  const template = getPaidAccessTemplate();
+  try {
+    await mailer.send({
+      to: delivery.session.email,
+      ...template({
+        email: delivery.session.email,
+        downloadURL: buildDownloadURL(delivery.token),
+        expiresAt: delivery.expiresAt,
+        planName,
+        siteURL,
+        tncURL,
+        logoURL
+      })
+    });
+    return { sent: true, configured: true, expiresAt: delivery.expiresAt };
+  } catch (error) {
+    await revokeDownloadToken(delivery.token);
+    throw error;
+  }
 }
