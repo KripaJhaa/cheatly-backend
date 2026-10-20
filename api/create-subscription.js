@@ -37,6 +37,6 @@ export default async function handler(req, res) {
     return send(res, 200, { subscription_id: subscription.id, plan_key: plan.key, key_id: requireEnv('RAZORPAY_KEY_ID'), name: plan.name, amount: plan.amountPaise, currency: 'INR' });
   } catch (error) {
     console.error(error);
-    return send(res, 500, { error: 'Could not create subscription' });
+    return send(res, 502, { error: error instanceof Error && error.message ? error.message : 'Could not create subscription' });
   }
 }
