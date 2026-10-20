@@ -98,6 +98,7 @@ export async function notifyPaidAccess({ sessionID, planName }) {
         downloadURL: buildDownloadURL(delivery.token),
         expiresAt: delivery.expiresAt,
         planName,
+        releaseVersion: process.env.CHEATLY_RELEASE_VERSION || 'current release',
         siteURL,
         tncURL,
         logoURL
