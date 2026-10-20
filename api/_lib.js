@@ -368,8 +368,9 @@ export async function markOrderPaid(orderID, paymentID = null) {
   await db.query('BEGIN');
   try {
     await db.query(
-      `UPDATE cheaty_sessions SET status='paid', paid_until=NULL, plan_key='lifetime', razorpay_payment_id=COALESCE($2, razorpay_payment_id), updated_at=NOW()
-       WHERE session_id=$1`, [session.session_id, paymentID]
+      `UPDATE cheaty_sessions SET status='paid', paid_until=NULL, plan_key='lifetime',
+         razorpay_payment_id=CASE WHEN session_id=$1 THEN COALESCE($2, razorpay_payment_id) ELSE razorpay_payment_id END,
+         updated_at=NOW() WHERE customer_id=$3`, [session.session_id, paymentID, session.customer_id]
     );
     await db.query(
       `UPDATE cheaty_licenses SET status='paid', paid_until=NULL, updated_at=NOW() WHERE session_id=$1`, [session.session_id]
@@ -409,8 +410,10 @@ export async function activateSubscription(subscriptionID, paymentID = null, eve
       [subscription.subscription_record_id, paidUntil]
     );
     await db.query(
-      `UPDATE cheaty_sessions SET status='paid', paid_until=$2, plan_key=$3, razorpay_subscription_id=$4, updated_at=NOW()
-       WHERE session_id=$1`, [subscription.session_id, paidUntil, subscription.plan_key, subscriptionID]
+      `UPDATE cheaty_sessions SET status='paid', paid_until=$2, plan_key=$3,
+       razorpay_subscription_id=CASE WHEN session_id=$1 THEN $4 ELSE razorpay_subscription_id END,
+       updated_at=NOW() WHERE customer_id=$5`,
+      [subscription.session_id, paidUntil, subscription.plan_key, subscriptionID, subscription.customer_id]
     );
     await db.query(
       `UPDATE cheaty_licenses SET status='paid', paid_until=$2, updated_at=NOW() WHERE customer_id=$1`,
