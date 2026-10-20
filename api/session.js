@@ -1,4 +1,4 @@
-import { readJSON, send, checkoutURL, getOrCreateSession } from './_lib.js';
+import { readJSON, send, checkoutURL, getOrCreateSession, ensureLicenseForSession } from './_lib.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return send(res, 405, { error: 'Method not allowed' });
@@ -11,7 +11,8 @@ export default async function handler(req, res) {
     if (!/^\S+@\S+\.\S+$/.test(email)) return send(res, 400, { error: 'A valid email is required' });
     if (!/^\+?[0-9 ()-]{8,20}$/.test(mobile)) return send(res, 400, { error: 'A valid mobile number is required' });
     const row = await getOrCreateSession(installID, email, mobile);
-    return send(res, 200, { session_id: row.session_id, status: row.status, expires_at: row.trial_expires_at, checkout_url: checkoutURL(row.session_id) });
+    await ensureLicenseForSession(row);
+    return send(res, 200, { session_id: row.session_id, customer_id: row.customer_id, status: row.status, expires_at: row.trial_expires_at, checkout_url: checkoutURL(row.session_id) });
   } catch (error) {
     console.error(error);
     return send(res, 500, { error: 'Could not create session' });

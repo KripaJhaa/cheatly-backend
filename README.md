@@ -1,6 +1,6 @@
 # Cheatly licensing backend for Vercel
 
-This is an independent Vercel project. It creates a trial session, creates a Razorpay order for that session, verifies payments, receives Razorpay webhooks, and returns the entitlement used by the macOS app.
+This is an independent Vercel project. It creates a trial session, creates Razorpay subscriptions for that session, verifies payments, receives Razorpay webhooks, and returns the entitlement used by the macOS app. The one-time order endpoints remain available for compatibility while subscriptions are rolled out.
 
 ## Endpoints
 
@@ -40,6 +40,32 @@ Email copy is versioned under `api/_lib/email-templates/`. To introduce a new cu
 
 If email configuration is absent or temporarily fails, the lead is still saved and the API response reports `email_sent: false`. This prevents a mail-provider outage from losing an interested customer.
 
+### Trials, plans, and profiles
+
+The first paid version has a server-controlled trial and subscription model:
+
+- `POST /api/session` registers an email/mobile pair against an installation and starts or resumes its trial.
+- `POST /api/entitlement` is the macOS app's authoritative access check. `TRIAL_DAYS` controls the default trial length.
+- `GET /api/plans` returns the configured monthly and annual plans without exposing Razorpay secrets.
+- `POST /api/create-subscription` creates a Razorpay Subscription for a session and plan.
+- `POST /api/verify-subscription` verifies the checkout callback. The webhook remains the source of truth.
+- `GET /api/profile?session_id=...` returns the current customer view and payment history for the first profile implementation.
+
+The hosted profile view is available at `/profile.html?session_id=...`. The session ID is intentionally scoped to the customer session and should be replaced with a magic-link token before exposing profile links broadly.
+
+Configure Razorpay Plans in the dashboard and put their IDs in Vercel:
+
+```text
+RAZORPAY_PLAN_MONTHLY=plan_...
+RAZORPAY_PLAN_ANNUAL=plan_...
+MONTHLY_PRICE_PAISE=29900
+ANNUAL_PRICE_PAISE=299000
+SUBSCRIPTION_TOTAL_COUNT=120
+TRIAL_DAYS=7
+```
+
+The database automatically creates customer, subscription, payment, and license records. Razorpay webhook events activate paid access and record recurring payments. Do not activate paid access based only on a browser redirect.
+
 ## Deploy
 
 From this directory:
@@ -54,6 +80,8 @@ npx vercel env add RAZORPAY_KEY_SECRET production
 npx vercel env add RAZORPAY_WEBHOOK_SECRET production
 npx vercel env add PUBLIC_BASE_URL production
 npx vercel env add CHECKOUT_PAGE_URL production
+npx vercel env add RAZORPAY_PLAN_MONTHLY production
+npx vercel env add RAZORPAY_PLAN_ANNUAL production
 npx vercel env add CORS_ORIGINS production
 npx vercel --prod
 ```
@@ -65,7 +93,11 @@ PUBLIC_BASE_URL=https://api.cheatly.pro
 CHECKOUT_PAGE_URL=https://api.cheatly.pro/checkout.html
 CORS_ORIGINS=https://cheatly.pro,https://www.cheatly.pro
 TRIAL_DAYS=7
-PRICE_PAISE=200000
+MONTHLY_PRICE_PAISE=29900
+ANNUAL_PRICE_PAISE=299000
+RAZORPAY_PLAN_MONTHLY=plan_your_monthly_plan_id
+RAZORPAY_PLAN_ANNUAL=plan_your_annual_plan_id
+SUBSCRIPTION_TOTAL_COUNT=120
 ```
 
 For Vercel Development, use the exact port where your local website runs, for example:
@@ -86,7 +118,7 @@ In Razorpay Dashboard, add:
 https://api.cheatly.pro/api/razorpay-webhook
 ```
 
-Subscribe to `payment.captured` and `order.paid`. Use the same secret in Razorpay and `RAZORPAY_WEBHOOK_SECRET`.
+Subscribe to `payment.captured`, `order.paid`, `subscription.authenticated`, and `subscription.charged`. Also add subscription cancellation/completion events when you are ready to expose subscription management. Use the same secret in Razorpay and `RAZORPAY_WEBHOOK_SECRET`.
 
 ## API contract
 

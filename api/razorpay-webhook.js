@@ -1,4 +1,4 @@
-import { readRaw, send, safeEqual, webhookSignature, markOrderPaid } from './_lib.js';
+import { readRaw, send, safeEqual, webhookSignature, markOrderPaid, activateSubscription, markSubscriptionStatus } from './_lib.js';
 
 export const config = { api: { bodyParser: false } };
 
@@ -13,6 +13,23 @@ export default async function handler(req, res) {
       const orderID = event.payload?.payment?.entity?.order_id || event.payload?.order?.entity?.id;
       const paymentID = event.payload?.payment?.entity?.id || null;
       if (orderID) await markOrderPaid(orderID, paymentID);
+    }
+    if (event.event === 'subscription.charged') {
+      const subscriptionID = event.payload?.subscription?.entity?.id;
+      const paymentID = event.payload?.payment?.entity?.id || null;
+      if (subscriptionID) await activateSubscription(subscriptionID, paymentID, event.event);
+    }
+    if (event.event === 'subscription.authenticated') {
+      const subscriptionID = event.payload?.subscription?.entity?.id;
+      if (subscriptionID) await markSubscriptionStatus(subscriptionID, 'authenticated');
+    }
+    if (event.event === 'subscription.cancelled') {
+      const subscriptionID = event.payload?.subscription?.entity?.id;
+      if (subscriptionID) await markSubscriptionStatus(subscriptionID, 'active', true);
+    }
+    if (event.event === 'subscription.halted' || event.event === 'subscription.completed') {
+      const subscriptionID = event.payload?.subscription?.entity?.id;
+      if (subscriptionID) await markSubscriptionStatus(subscriptionID, event.event.replace('subscription.', ''));
     }
     return send(res, 200, { received: true });
   } catch (error) {

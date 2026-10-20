@@ -1,4 +1,4 @@
-import { database, ensureSchema, send } from './_lib.js';
+import { database, ensureSchema, planDefinitions, send, trialDays } from './_lib.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') return send(res, 405, { error: 'Method not allowed' });
@@ -11,7 +11,9 @@ export default async function handler(req, res) {
       razorpayKey: Boolean(process.env.RAZORPAY_KEY_ID),
       razorpaySecret: Boolean(process.env.RAZORPAY_KEY_SECRET),
       webhookSecret: Boolean(process.env.RAZORPAY_WEBHOOK_SECRET),
-      checkoutURL: Boolean(process.env.CHECKOUT_PAGE_URL)
+      checkoutURL: Boolean(process.env.CHECKOUT_PAGE_URL),
+      trialDays: trialDays(),
+      subscriptionPlans: planDefinitions().map((plan) => plan.key)
     });
   } catch (error) {
     console.error(error);
