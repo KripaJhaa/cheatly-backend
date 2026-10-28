@@ -13,8 +13,9 @@ export default async function handler(req, res) {
     if (event.event === 'payment.captured' || event.event === 'order.paid') {
       const orderID = event.payload?.payment?.entity?.order_id || event.payload?.order?.entity?.id;
       const paymentID = event.payload?.payment?.entity?.id || null;
+      const providerPayment = event.payload?.payment?.entity || null;
       if (orderID) {
-        const paid = await markOrderPaid(orderID, paymentID);
+        const paid = await markOrderPaid(orderID, paymentID, providerPayment);
         if (paid) {
           try { await notifyPaidAccess({ sessionID: paid.sessionID, planName: 'Cheatly Lifetime' }); } catch (deliveryError) { console.error('Paid delivery email failed:', deliveryError); }
         }
@@ -23,8 +24,9 @@ export default async function handler(req, res) {
     if (event.event === 'subscription.charged') {
       const subscriptionID = event.payload?.subscription?.entity?.id;
       const paymentID = event.payload?.payment?.entity?.id || null;
+      const providerPayment = event.payload?.payment?.entity || null;
       if (subscriptionID) {
-        const paid = await activateSubscription(subscriptionID, paymentID, event.event);
+        const paid = await activateSubscription(subscriptionID, paymentID, event.event, providerPayment);
         if (paid) {
           try { await notifyPaidAccess({ sessionID: paid.sessionID, planName: 'Cheatly Subscription' }); } catch (deliveryError) { console.error('Paid delivery email failed:', deliveryError); }
         }

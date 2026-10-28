@@ -65,7 +65,7 @@ The first paid version has a server-controlled trial and subscription model:
 - `GET /api/profile?session_id=...` returns the current customer view and payment history for the first profile implementation.
 - `GET /api/download?token=...` consumes a customer-bound, expiring one-time installer token and streams the private artifact.
 
-The hosted profile view is available at `/profile.html?session_id=...`. The session ID is intentionally scoped to the customer session and should be replaced with a magic-link token before exposing profile links broadly.
+The hosted profile view is available at `/profile.html?session_id=...` on the API host. The checkout UI is hosted by the public website at `/checkout/?session_id=...` and calls the API using the configured CORS origins. The session ID is intentionally scoped to the customer session and should be replaced with a magic-link token before exposing profile links broadly.
 
 Configure Razorpay Plans in the dashboard and put their IDs in Vercel:
 
@@ -77,6 +77,17 @@ ANNUAL_PRICE_PAISE=299000
 SUBSCRIPTION_TOTAL_COUNT=120
 TRIAL_DAYS=7
 ```
+
+International requests are detected from the deployment's country header. India uses the INR plans; other countries use USD pricing calculated as the INR price multiplied by `INTERNATIONAL_PRICE_MULTIPLIER` and divided by the effective `PAYPAL_INR_PER_USD` rate, with the result rounded up to the next cent. Set `PAYPAL_INR_PER_USD` to the effective PayPal INR/USD rate, including PayPal's conversion spread. Configure separate USD Razorpay plan IDs before exposing international monthly or annual subscriptions:
+
+```text
+PAYPAL_INR_PER_USD=95.25
+INTERNATIONAL_PRICE_MULTIPLIER=1.5
+RAZORPAY_PLAN_MONTHLY_USD=plan_...
+RAZORPAY_PLAN_ANNUAL_USD=plan_...
+```
+
+The one-time lifetime order uses the calculated USD amount automatically. Until the USD subscription plan IDs are configured, international checkout intentionally exposes only the lifetime plan rather than charging an INR subscription plan at a USD price.
 
 The database automatically creates customer, subscription, payment, license, and download-token records. Razorpay webhook events activate paid access and record recurring payments. Do not activate paid access based only on a browser redirect.
 
@@ -108,7 +119,7 @@ Recommended values:
 
 ```text
 PUBLIC_BASE_URL=https://api.cheatly.pro
-CHECKOUT_PAGE_URL=https://api.cheatly.pro/checkout.html
+CHECKOUT_PAGE_URL=https://cheatly.pro/checkout/
 CORS_ORIGINS=https://cheatly.pro,https://www.cheatly.pro
 TRIAL_DAYS=7
 MONTHLY_PRICE_PAISE=29900

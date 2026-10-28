@@ -1,7 +1,9 @@
-import { database, ensureSchema, readJSON, send, razorpaySignature, safeEqual, razorpay, markOrderPaid } from './_lib.js';
+import { applyCors, database, ensureSchema, readJSON, send, razorpaySignature, safeEqual, razorpay, markOrderPaid } from './_lib.js';
 import { notifyPaidAccess } from './_lib/mailer.js';
 
 export default async function handler(req, res) {
+  applyCors(req, res);
+  if (req.method === 'OPTIONS') return res.status(204).end();
   if (req.method !== 'POST') return send(res, 405, { error: 'Method not allowed' });
   try {
     const body = await readJSON(req);
@@ -14,7 +16,7 @@ export default async function handler(req, res) {
     if (!result.rows[0] || !safeEqual(razorpaySignature(orderID, paymentID), signature)) return send(res, 400, { error: 'Payment verification failed' });
     const payment = await razorpay(`/payments/${encodeURIComponent(paymentID)}`);
     if (payment.status !== 'captured') return send(res, 202, { status: payment.status, message: 'Payment received but not captured yet' });
-    await markOrderPaid(orderID, paymentID);
+    await markOrderPaid(orderID, paymentID, payment);
     try { await notifyPaidAccess({ sessionID, planName: 'Cheatly Lifetime' }); } catch (deliveryError) { console.error('Paid delivery email failed:', deliveryError); }
     return send(res, 200, { status: 'paid', message: 'Lifetime access is active' });
   } catch (error) {

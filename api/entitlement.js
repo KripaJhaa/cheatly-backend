@@ -1,6 +1,8 @@
-import { database, ensureSchema, readJSON, send, checkoutURL, getOrCreateSession, ensureLicenseForSession } from './_lib.js';
+import { applyCors, database, ensureSchema, readJSON, send, checkoutURL, getOrCreateSession, ensureLicenseForSession } from './_lib.js';
 
 export default async function handler(req, res) {
+  applyCors(req, res);
+  if (req.method === 'OPTIONS') return res.status(204).end();
   if (req.method !== 'POST') return send(res, 405, { error: 'Method not allowed' });
   try {
     const body = await readJSON(req);

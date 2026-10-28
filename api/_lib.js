@@ -28,6 +28,8 @@ export async function ensureSchema() {
         paid_until TIMESTAMPTZ,
         plan_key TEXT,
         razorpay_order_id TEXT UNIQUE,
+        razorpay_order_amount_minor INTEGER,
+        razorpay_order_currency TEXT NOT NULL DEFAULT 'INR',
         razorpay_payment_id TEXT UNIQUE,
         razorpay_subscription_id TEXT UNIQUE,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -37,6 +39,8 @@ export async function ensureSchema() {
       ALTER TABLE cheaty_sessions ADD COLUMN IF NOT EXISTS mobile TEXT;
       ALTER TABLE cheaty_sessions ADD COLUMN IF NOT EXISTS paid_until TIMESTAMPTZ;
       ALTER TABLE cheaty_sessions ADD COLUMN IF NOT EXISTS plan_key TEXT;
+      ALTER TABLE cheaty_sessions ADD COLUMN IF NOT EXISTS razorpay_order_amount_minor INTEGER;
+      ALTER TABLE cheaty_sessions ADD COLUMN IF NOT EXISTS razorpay_order_currency TEXT NOT NULL DEFAULT 'INR';
       ALTER TABLE cheaty_sessions ADD COLUMN IF NOT EXISTS razorpay_subscription_id TEXT UNIQUE;
       CREATE INDEX IF NOT EXISTS cheaty_sessions_status_idx ON cheaty_sessions(status);
       CREATE TABLE IF NOT EXISTS cheaty_customers (
@@ -52,6 +56,8 @@ export async function ensureSchema() {
         session_id UUID REFERENCES cheaty_sessions(session_id),
         plan_key TEXT NOT NULL,
         razorpay_subscription_id TEXT NOT NULL UNIQUE,
+        currency TEXT NOT NULL DEFAULT 'INR',
+        pricing_region TEXT NOT NULL DEFAULT 'IN',
         status TEXT NOT NULL DEFAULT 'created',
         current_start_at TIMESTAMPTZ,
         current_end_at TIMESTAMPTZ,
@@ -59,6 +65,8 @@ export async function ensureSchema() {
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
+      ALTER TABLE cheaty_subscriptions ADD COLUMN IF NOT EXISTS currency TEXT NOT NULL DEFAULT 'INR';
+      ALTER TABLE cheaty_subscriptions ADD COLUMN IF NOT EXISTS pricing_region TEXT NOT NULL DEFAULT 'IN';
       CREATE INDEX IF NOT EXISTS cheaty_subscriptions_customer_idx ON cheaty_subscriptions(customer_id, created_at DESC);
       CREATE TABLE IF NOT EXISTS cheaty_payments (
         payment_record_id UUID PRIMARY KEY,
@@ -150,20 +158,47 @@ export function checkoutURL(sessionID) {
   return `${page}${page.includes('?') ? '&' : '?'}session_id=${encodeURIComponent(sessionID)}`;
 }
 
+export function requestCountry(req) {
+  const country = req?.headers?.['x-vercel-ip-country'] || req?.headers?.['cf-ipcountry'] || '';
+  return /^[A-Za-z]{2}$/.test(country) ? String(country).toUpperCase() : null;
+}
+
+export function pricingRegion(req) {
+  const forced = String(process.env.PRICING_REGION || '').trim().toUpperCase();
+  if (forced === 'IN' || forced === 'INTL') return forced;
+  const country = requestCountry(req);
+  return country ? (country === 'IN' ? 'IN' : 'INTL') : 'IN';
+}
+
+function internationalAmountMinor(inrPaise) {
+  const inrPerUsd = Number(process.env.PAYPAL_INR_PER_USD || 95.25);
+  const multiplier = Number(process.env.INTERNATIONAL_PRICE_MULTIPLIER || 1.5);
+  if (!Number.isFinite(inrPerUsd) || inrPerUsd <= 0 || !Number.isFinite(multiplier) || multiplier <= 0) return Math.max(1, Math.ceil(inrPaise / 95.25));
+  return Math.max(1, Math.ceil((inrPaise / 100) * multiplier / inrPerUsd * 100));
+}
+
 export function trialDays() {
   const days = Number(process.env.TRIAL_DAYS || 7);
   return Number.isFinite(days) && days > 0 ? Math.min(days, 30) : 7;
 }
 
-export function planDefinitions() {
+export function planDefinitions(region = 'IN') {
+  const international = String(region).toUpperCase() === 'INTL';
+  const currency = international ? 'USD' : 'INR';
+  const monthlyINR = Number(process.env.MONTHLY_PRICE_PAISE || 29900);
+  const annualINR = Number(process.env.ANNUAL_PRICE_PAISE || 299000);
+  const lifetimeINR = Number(process.env.LIFETIME_PRICE_PAISE || process.env.PRICE_PAISE || 200000);
+  const amount = (inrPaise) => international ? internationalAmountMinor(inrPaise) : inrPaise;
   const plans = [
     {
       key: 'monthly',
       name: 'Cheatly Monthly',
       description: 'Private workspace access, billed monthly.',
       interval: 'monthly',
-      amountPaise: Number(process.env.MONTHLY_PRICE_PAISE || 29900),
-      razorpayPlanID: process.env.RAZORPAY_PLAN_MONTHLY || ''
+      amountPaise: amount(monthlyINR),
+      currency,
+      pricingRegion: international ? 'INTL' : 'IN',
+      razorpayPlanID: international ? process.env.RAZORPAY_PLAN_MONTHLY_USD || '' : process.env.RAZORPAY_PLAN_MONTHLY || ''
     },
     {
       key: 'annual',
@@ -171,8 +206,10 @@ export function planDefinitions() {
       description: 'Private workspace access, billed yearly.',
       interval: 'annual',
       kind: 'subscription',
-      amountPaise: Number(process.env.ANNUAL_PRICE_PAISE || 299000),
-      razorpayPlanID: process.env.RAZORPAY_PLAN_ANNUAL || ''
+      amountPaise: amount(annualINR),
+      currency,
+      pricingRegion: international ? 'INTL' : 'IN',
+      razorpayPlanID: international ? process.env.RAZORPAY_PLAN_ANNUAL_USD || '' : process.env.RAZORPAY_PLAN_ANNUAL || ''
     }
   ];
   plans[0].kind = 'subscription';
@@ -182,7 +219,9 @@ export function planDefinitions() {
     description: 'One-time purchase with lifetime access.',
     interval: 'lifetime',
     kind: 'one_time',
-    amountPaise: Number(process.env.LIFETIME_PRICE_PAISE || process.env.PRICE_PAISE || 200000),
+    amountPaise: amount(lifetimeINR),
+    currency,
+    pricingRegion: international ? 'INTL' : 'IN',
     razorpayPlanID: ''
   };
   const recurring = plans.filter((plan) => plan.razorpayPlanID && Number.isInteger(plan.amountPaise) && plan.amountPaise > 0);
@@ -190,8 +229,8 @@ export function planDefinitions() {
   return lifetimeEnabled ? [...recurring, lifetime] : recurring;
 }
 
-export function planDefinition(planKey) {
-  return planDefinitions().find((plan) => plan.key === String(planKey || '').trim().toLowerCase()) || null;
+export function planDefinition(planKey, region = 'IN') {
+  return planDefinitions(region).find((plan) => plan.key === String(planKey || '').trim().toLowerCase()) || null;
 }
 
 export function subscriptionSignature(paymentID, subscriptionID) {
@@ -296,12 +335,25 @@ export async function getOrCreateSession(installID, email = null, mobile = null)
     }
     return existing.rows[0];
   }
+  // A new install ID must not restart a customer's trial. Reinstalling the
+  // app or downloading it on another Mac creates a new session, but access is
+  // inherited from the customer's existing server-side entitlement.
+  const prior = customer
+    ? (await database().query(
+      `SELECT status, trial_expires_at, paid_until, plan_key
+       FROM cheaty_sessions WHERE customer_id=$1 ORDER BY created_at ASC LIMIT 1`,
+      [customer.customer_id]
+    )).rows[0]
+    : null;
   const sessionID = crypto.randomUUID();
-  const expires = new Date(Date.now() + trialDays() * 86400000);
+  const expires = prior?.trial_expires_at ? new Date(prior.trial_expires_at) : new Date(Date.now() + trialDays() * 86400000);
+  const paidActive = prior?.status === 'paid' && (!prior.paid_until || new Date(prior.paid_until) > new Date());
+  const status = paidActive ? 'paid' : expires <= new Date() ? 'expired' : 'trial';
   try {
     const created = await database().query(
-      `INSERT INTO cheaty_sessions(session_id, install_id, customer_id, email, mobile, trial_expires_at) VALUES($1,$2,$3,$4,$5,$6) RETURNING *`,
-      [sessionID, installID, customer?.customer_id || null, email ? String(email).slice(0, 320) : null, mobile ? String(mobile).slice(0, 32) : null, expires]
+      `INSERT INTO cheaty_sessions(session_id, install_id, customer_id, email, mobile, status, trial_expires_at, paid_until, plan_key)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+      [sessionID, installID, customer?.customer_id || null, email ? String(email).slice(0, 320) : null, mobile ? String(mobile).slice(0, 32) : null, status, expires, paidActive ? prior.paid_until : null, paidActive ? prior.plan_key : null]
     );
     return created.rows[0];
   } catch (error) {
@@ -317,15 +369,20 @@ export async function ensureLicenseForSession(session) {
   if (existing.rows[0]) return existing.rows[0];
   const created = await database().query(
     `INSERT INTO cheaty_licenses(license_id, customer_id, session_id, install_id, status, trial_expires_at)
-     VALUES($1,$2,$3,$4,'trial',$5) RETURNING *`,
-    [crypto.randomUUID(), session.customer_id, session.session_id, session.install_id, session.trial_expires_at]
+     VALUES($1,$2,$3,$4,$5,$6) RETURNING *`,
+    [crypto.randomUUID(), session.customer_id, session.session_id, session.install_id, session.status, session.trial_expires_at]
   );
+  if (session.paid_until) {
+    await database().query('UPDATE cheaty_licenses SET paid_until=$2, updated_at=NOW() WHERE license_id=$1', [created.rows[0].license_id, session.paid_until]);
+    created.rows[0].paid_until = session.paid_until;
+  }
   return created.rows[0];
 }
 
-export function pricePaise() {
+export function pricePaise(region = 'IN') {
   const amount = Number(process.env.LIFETIME_PRICE_PAISE || process.env.PRICE_PAISE || 200000);
-  return Number.isInteger(amount) && amount > 0 ? amount : 200000;
+  const base = Number.isInteger(amount) && amount > 0 ? amount : 200000;
+  return String(region).toUpperCase() === 'INTL' ? internationalAmountMinor(base) : base;
 }
 
 export function requireEnv(name) {
@@ -360,11 +417,13 @@ export async function razorpay(path, options = {}) {
   return data;
 }
 
-export async function markOrderPaid(orderID, paymentID = null) {
+export async function markOrderPaid(orderID, paymentID = null, providerPayment = null) {
   await ensureSchema();
   const db = database();
   const session = (await db.query('SELECT * FROM cheaty_sessions WHERE razorpay_order_id=$1', [orderID])).rows[0];
   if (!session) return null;
+  const amountMinor = Number(providerPayment?.amount || session.razorpay_order_amount_minor || pricePaise(session.razorpay_order_currency === 'USD' ? 'INTL' : 'IN'));
+  const currency = String(providerPayment?.currency || session.razorpay_order_currency || 'INR').toUpperCase();
   await db.query('BEGIN');
   try {
     await db.query(
@@ -377,9 +436,9 @@ export async function markOrderPaid(orderID, paymentID = null) {
     );
     if (paymentID && session.customer_id) {
       await db.query(
-        `INSERT INTO cheaty_payments(payment_record_id, customer_id, session_id, razorpay_payment_id, razorpay_order_id, amount_paise, status, event_name)
-         VALUES($1,$2,$3,$4,$5,$6,'captured','payment.captured') ON CONFLICT(razorpay_payment_id) DO NOTHING`,
-        [crypto.randomUUID(), session.customer_id, session.session_id, paymentID, orderID, pricePaise()]
+        `INSERT INTO cheaty_payments(payment_record_id, customer_id, session_id, razorpay_payment_id, razorpay_order_id, amount_paise, currency, status, event_name)
+         VALUES($1,$2,$3,$4,$5,$6,$7,'captured','payment.captured') ON CONFLICT(razorpay_payment_id) DO NOTHING`,
+        [crypto.randomUUID(), session.customer_id, session.session_id, paymentID, orderID, amountMinor, currency]
       );
     }
     await db.query('COMMIT');
@@ -390,14 +449,16 @@ export async function markOrderPaid(orderID, paymentID = null) {
   return { sessionID: session.session_id };
 }
 
-export async function activateSubscription(subscriptionID, paymentID = null, eventName = 'subscription.charged') {
+export async function activateSubscription(subscriptionID, paymentID = null, eventName = 'subscription.charged', providerPayment = null) {
   await ensureSchema();
   const subscription = (await database().query(
     `SELECT s.*, c.email, c.mobile FROM cheaty_subscriptions s JOIN cheaty_customers c ON c.customer_id=s.customer_id WHERE s.razorpay_subscription_id=$1`,
     [subscriptionID]
   )).rows[0];
   if (!subscription) return null;
-  const plan = planDefinition(subscription.plan_key);
+  const plan = planDefinition(subscription.plan_key, subscription.pricing_region || (subscription.currency === 'USD' ? 'INTL' : 'IN'));
+  const amountMinor = Number(providerPayment?.amount || plan?.amountPaise || 0) || null;
+  const currency = String(providerPayment?.currency || subscription.currency || plan?.currency || 'INR').toUpperCase();
   const currentEnd = subscription.current_end_at && new Date(subscription.current_end_at) > new Date()
     ? new Date(subscription.current_end_at)
     : new Date();
@@ -421,9 +482,9 @@ export async function activateSubscription(subscriptionID, paymentID = null, eve
     );
     if (paymentID) {
       await db.query(
-        `INSERT INTO cheaty_payments(payment_record_id, customer_id, subscription_record_id, session_id, razorpay_payment_id, razorpay_subscription_id, amount_paise, status, event_name)
-         VALUES($1,$2,$3,$4,$5,$6,$7,'captured',$8) ON CONFLICT(razorpay_payment_id) DO NOTHING`,
-        [crypto.randomUUID(), subscription.customer_id, subscription.subscription_record_id, subscription.session_id, paymentID, subscriptionID, plan?.amountPaise || null, eventName]
+        `INSERT INTO cheaty_payments(payment_record_id, customer_id, subscription_record_id, session_id, razorpay_payment_id, razorpay_subscription_id, amount_paise, currency, status, event_name)
+         VALUES($1,$2,$3,$4,$5,$6,$7,$8,'captured',$9) ON CONFLICT(razorpay_payment_id) DO NOTHING`,
+        [crypto.randomUUID(), subscription.customer_id, subscription.subscription_record_id, subscription.session_id, paymentID, subscriptionID, amountMinor, currency, eventName]
       );
     }
     await db.query('COMMIT');
