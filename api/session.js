@@ -14,7 +14,7 @@ export default async function handler(req, res) {
     if (!/^\+?[0-9 ()-]{8,20}$/.test(mobile)) return send(res, 400, { error: 'A valid mobile number is required' });
     const row = await getOrCreateSession(installID, email, mobile);
     await ensureLicenseForSession(row);
-    return send(res, 200, { session_id: row.session_id, customer_id: row.customer_id, status: row.status, expires_at: row.trial_expires_at, checkout_url: checkoutURL(row.session_id) });
+    return send(res, 200, { session_id: row.session_id, customer_id: row.customer_id, status: row.status, expires_at: row.trial_expires_at, checkout_url: row.status === 'paid' ? null : checkoutURL(row.session_id) });
   } catch (error) {
     console.error(error);
     return send(res, 500, { error: 'Could not create session' });

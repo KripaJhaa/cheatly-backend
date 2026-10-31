@@ -32,6 +32,7 @@ export async function ensureSchema() {
         razorpay_order_currency TEXT NOT NULL DEFAULT 'INR',
         razorpay_payment_id TEXT UNIQUE,
         razorpay_subscription_id TEXT UNIQUE,
+        checkout_consumed_at TIMESTAMPTZ,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
@@ -42,6 +43,7 @@ export async function ensureSchema() {
       ALTER TABLE cheaty_sessions ADD COLUMN IF NOT EXISTS razorpay_order_amount_minor INTEGER;
       ALTER TABLE cheaty_sessions ADD COLUMN IF NOT EXISTS razorpay_order_currency TEXT NOT NULL DEFAULT 'INR';
       ALTER TABLE cheaty_sessions ADD COLUMN IF NOT EXISTS razorpay_subscription_id TEXT UNIQUE;
+      ALTER TABLE cheaty_sessions ADD COLUMN IF NOT EXISTS checkout_consumed_at TIMESTAMPTZ;
       CREATE INDEX IF NOT EXISTS cheaty_sessions_status_idx ON cheaty_sessions(status);
       CREATE TABLE IF NOT EXISTS cheaty_customers (
         customer_id UUID PRIMARY KEY,
@@ -428,7 +430,7 @@ export async function markOrderPaid(orderID, paymentID = null, providerPayment =
   await db.query('BEGIN');
   try {
     await db.query(
-      `UPDATE cheaty_sessions SET status='paid', paid_until=NULL, plan_key='lifetime',
+      `UPDATE cheaty_sessions SET status='paid', paid_until=NULL, plan_key='lifetime', checkout_consumed_at=COALESCE(checkout_consumed_at, NOW()),
          razorpay_payment_id=CASE WHEN session_id=$1 THEN COALESCE($2, razorpay_payment_id) ELSE razorpay_payment_id END,
          updated_at=NOW() WHERE customer_id=$3`, [session.session_id, paymentID, session.customer_id]
     );
@@ -457,6 +459,16 @@ export async function activateSubscription(subscriptionID, paymentID = null, eve
     [subscriptionID]
   )).rows[0];
   if (!subscription) return null;
+  if (paymentID) {
+    const existingPayment = (await database().query(
+      'SELECT subscription_record_id FROM cheaty_payments WHERE razorpay_payment_id=$1',
+      [paymentID]
+    )).rows[0];
+    if (existingPayment) {
+      if (existingPayment.subscription_record_id !== subscription.subscription_record_id) throw new Error('Payment is already linked to another subscription');
+      return { sessionID: subscription.session_id, paidUntil: subscription.current_end_at, alreadyProcessed: true };
+    }
+  }
   const plan = planDefinition(subscription.plan_key, subscription.pricing_region || (subscription.currency === 'USD' ? 'INTL' : 'IN'));
   const amountMinor = Number(providerPayment?.amount || plan?.amountPaise || 0) || null;
   const currency = String(providerPayment?.currency || subscription.currency || plan?.currency || 'INR').toUpperCase();
@@ -472,7 +484,7 @@ export async function activateSubscription(subscriptionID, paymentID = null, eve
       [subscription.subscription_record_id, paidUntil]
     );
     await db.query(
-      `UPDATE cheaty_sessions SET status='paid', paid_until=$2, plan_key=$3,
+      `UPDATE cheaty_sessions SET status='paid', paid_until=$2, plan_key=$3, checkout_consumed_at=COALESCE(checkout_consumed_at, NOW()),
        razorpay_subscription_id=CASE WHEN session_id=$1 THEN $4 ELSE razorpay_subscription_id END,
        updated_at=NOW() WHERE customer_id=$5`,
       [subscription.session_id, paidUntil, subscription.plan_key, subscriptionID, subscription.customer_id]

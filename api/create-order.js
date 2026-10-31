@@ -15,7 +15,7 @@ export default async function handler(req, res) {
     const result = await database().query('SELECT * FROM cheaty_sessions WHERE session_id=$1', [sessionID]);
     const session = result.rows[0];
     if (!session) return send(res, 404, { error: 'Session not found' });
-    if (session.status === 'paid') return send(res, 409, { error: 'This session is already paid' });
+    if (session.status === 'paid' || session.checkout_consumed_at) return send(res, 409, { error: 'This checkout session is no longer active' });
     const amount = plan.amountPaise;
     const currency = plan.currency;
     const existingAmount = Number(session.razorpay_order_amount_minor || 0);

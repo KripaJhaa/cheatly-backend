@@ -21,7 +21,7 @@ export default async function handler(req, res) {
     }
     const status = row.status === 'paid' && (!row.paid_until || new Date(row.paid_until) > new Date()) ? 'paid' : (expired || row.status === 'expired' || paidExpired ? 'expired' : 'trial');
     const expiresAt = status === 'paid' ? row.paid_until : row.trial_expires_at;
-    return send(res, 200, { status, expiresAt, registrationRequired: !row.email || !row.mobile, plan: row.plan_key || null, message: status === 'trial' ? 'Free trial active' : status === 'paid' ? 'Paid access active' : 'Your trial has ended. Choose a plan to continue.', checkoutURL: checkoutURL(row.session_id) });
+    return send(res, 200, { status, expiresAt, registrationRequired: !row.email || !row.mobile, plan: row.plan_key || null, message: status === 'trial' ? 'Free trial active' : status === 'paid' ? 'Paid access active' : 'Your trial has ended. Choose a plan to continue.', checkoutURL: status === 'paid' ? null : checkoutURL(row.session_id) });
   } catch (error) {
     console.error(error);
     return send(res, 503, { error: 'Access could not be verified' });

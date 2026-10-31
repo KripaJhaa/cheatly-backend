@@ -16,6 +16,7 @@ export default async function handler(req, res) {
     const session = (await database().query('SELECT * FROM cheaty_sessions WHERE session_id=$1', [sessionID])).rows[0];
     if (!session) return send(res, 404, { error: 'Session not found' });
     if (!session.customer_id || !session.email) return send(res, 400, { error: 'Complete registration before choosing a plan' });
+    if (session.checkout_consumed_at) return send(res, 409, { error: 'This checkout session is no longer active' });
     if (session.status === 'paid' && session.paid_until && new Date(session.paid_until) > new Date()) return send(res, 409, { error: 'This session already has active paid access' });
     const providerPlan = await razorpay(`/plans/${encodeURIComponent(plan.razorpayPlanID)}`);
     const providerAmount = Number(providerPlan?.item?.amount || 0);
