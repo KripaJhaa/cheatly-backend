@@ -27,7 +27,17 @@ export default async function handler(req, res) {
       `SELECT * FROM cheaty_subscriptions WHERE session_id=$1 AND plan_key=$2 AND pricing_region=$3 AND status IN ('created','authenticated','active') ORDER BY created_at DESC LIMIT 1`,
       [sessionID, planKey, region]
     )).rows[0];
-    if (existing) return send(res, 200, { subscription_id: existing.razorpay_subscription_id, plan_key: plan.key, key_id: requireEnv('RAZORPAY_KEY_ID') });
+    if (existing) {
+      let existingProviderSubscription = null;
+      try {
+        existingProviderSubscription = await razorpay(`/subscriptions/${encodeURIComponent(existing.razorpay_subscription_id)}`);
+      } catch (lookupError) {
+        console.error('Could not inspect existing Razorpay subscription:', lookupError);
+      }
+      const samePlan = existingProviderSubscription?.plan_id === plan.razorpayPlanID;
+      const reusableStatus = ['created', 'authenticated', 'active'].includes(String(existingProviderSubscription?.status || '').toLowerCase());
+      if (samePlan && reusableStatus) return send(res, 200, { subscription_id: existing.razorpay_subscription_id, plan_key: plan.key, key_id: requireEnv('RAZORPAY_KEY_ID'), amount: plan.amountPaise, currency: plan.currency });
+    }
     const subscription = await razorpay('/subscriptions', {
       method: 'POST',
       body: JSON.stringify({
