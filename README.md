@@ -78,16 +78,14 @@ SUBSCRIPTION_TOTAL_COUNT=120
 TRIAL_DAYS=7
 ```
 
-International requests are detected from the deployment's country header. India uses the INR plans; other countries use USD pricing calculated as the INR price multiplied by `INTERNATIONAL_PRICE_MULTIPLIER` and divided by the effective `PAYPAL_INR_PER_USD` rate, with the result rounded up to the next cent. Set `PAYPAL_INR_PER_USD` to the effective PayPal INR/USD rate, including PayPal's conversion spread. Configure separate USD Razorpay plan IDs before exposing international monthly or annual subscriptions:
+International requests are detected from the deployment's country header. India uses the INR plans; other countries use fixed USD prices in $5 steps: `$5` monthly, `$45` annually, and `$30` lifetime. Configure separate USD Razorpay plan IDs before exposing international monthly or annual subscriptions:
 
 ```text
-PAYPAL_INR_PER_USD=95.25
-INTERNATIONAL_PRICE_MULTIPLIER=1.5
 RAZORPAY_PLAN_MONTHLY_USD=plan_...
 RAZORPAY_PLAN_ANNUAL_USD=plan_...
 ```
 
-The one-time lifetime order uses the calculated USD amount automatically. Until the USD subscription plan IDs are configured, international checkout intentionally exposes only the lifetime plan rather than charging an INR subscription plan at a USD price.
+The one-time lifetime order uses the fixed `$30` USD amount automatically. Until the USD subscription plan IDs are configured, international checkout intentionally exposes only the lifetime plan rather than charging an INR subscription plan at a USD price.
 
 The database automatically creates customer, subscription, payment, license, and download-token records. Razorpay webhook events activate paid access and record recurring payments. Do not activate paid access based only on a browser redirect.
 

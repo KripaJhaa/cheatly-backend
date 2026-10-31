@@ -170,12 +170,13 @@ export function pricingRegion(req) {
   return country ? (country === 'IN' ? 'IN' : 'INTL') : 'IN';
 }
 
-function internationalAmountMinor(inrPaise) {
-  const inrPerUsd = Number(process.env.PAYPAL_INR_PER_USD || 95.25);
-  const multiplier = Number(process.env.INTERNATIONAL_PRICE_MULTIPLIER || 1.5);
-  if (!Number.isFinite(inrPerUsd) || inrPerUsd <= 0 || !Number.isFinite(multiplier) || multiplier <= 0) return Math.max(1, Math.ceil(inrPaise / 95.25));
-  return Math.max(1, Math.ceil((inrPaise / 100) * multiplier / inrPerUsd * 100));
-}
+// International prices are fixed USD amounts in cents. Keeping these values
+// explicit avoids exposing FX decimals and keeps every price on a $5 step.
+const INTERNATIONAL_PRICE_MINOR = Object.freeze({
+  monthly: 500,
+  annual: 4500,
+  lifetime: 3000
+});
 
 export function trialDays() {
   const days = Number(process.env.TRIAL_DAYS || 7);
@@ -188,14 +189,14 @@ export function planDefinitions(region = 'IN') {
   const monthlyINR = Number(process.env.MONTHLY_PRICE_PAISE || 29900);
   const annualINR = Number(process.env.ANNUAL_PRICE_PAISE || 299000);
   const lifetimeINR = Number(process.env.LIFETIME_PRICE_PAISE || process.env.PRICE_PAISE || 200000);
-  const amount = (inrPaise) => international ? internationalAmountMinor(inrPaise) : inrPaise;
+  const amount = (planKey, inrPaise) => international ? INTERNATIONAL_PRICE_MINOR[planKey] : inrPaise;
   const plans = [
     {
       key: 'monthly',
       name: 'Cheatly Monthly',
       description: 'Private workspace access, billed monthly.',
       interval: 'monthly',
-      amountPaise: amount(monthlyINR),
+      amountPaise: amount('monthly', monthlyINR),
       currency,
       pricingRegion: international ? 'INTL' : 'IN',
       razorpayPlanID: international ? process.env.RAZORPAY_PLAN_MONTHLY_USD || '' : process.env.RAZORPAY_PLAN_MONTHLY || ''
@@ -206,7 +207,7 @@ export function planDefinitions(region = 'IN') {
       description: 'Private workspace access, billed yearly.',
       interval: 'annual',
       kind: 'subscription',
-      amountPaise: amount(annualINR),
+      amountPaise: amount('annual', annualINR),
       currency,
       pricingRegion: international ? 'INTL' : 'IN',
       razorpayPlanID: international ? process.env.RAZORPAY_PLAN_ANNUAL_USD || '' : process.env.RAZORPAY_PLAN_ANNUAL || ''
@@ -219,7 +220,7 @@ export function planDefinitions(region = 'IN') {
     description: 'One-time purchase with lifetime access.',
     interval: 'lifetime',
     kind: 'one_time',
-    amountPaise: amount(lifetimeINR),
+    amountPaise: amount('lifetime', lifetimeINR),
     currency,
     pricingRegion: international ? 'INTL' : 'IN',
     razorpayPlanID: ''
@@ -382,7 +383,7 @@ export async function ensureLicenseForSession(session) {
 export function pricePaise(region = 'IN') {
   const amount = Number(process.env.LIFETIME_PRICE_PAISE || process.env.PRICE_PAISE || 200000);
   const base = Number.isInteger(amount) && amount > 0 ? amount : 200000;
-  return String(region).toUpperCase() === 'INTL' ? internationalAmountMinor(base) : base;
+  return String(region).toUpperCase() === 'INTL' ? INTERNATIONAL_PRICE_MINOR.lifetime : base;
 }
 
 export function requireEnv(name) {
