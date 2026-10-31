@@ -17,6 +17,12 @@ export default async function handler(req, res) {
     if (!session) return send(res, 404, { error: 'Session not found' });
     if (!session.customer_id || !session.email) return send(res, 400, { error: 'Complete registration before choosing a plan' });
     if (session.status === 'paid' && session.paid_until && new Date(session.paid_until) > new Date()) return send(res, 409, { error: 'This session already has active paid access' });
+    const providerPlan = await razorpay(`/plans/${encodeURIComponent(plan.razorpayPlanID)}`);
+    const providerAmount = Number(providerPlan?.item?.amount || 0);
+    const providerCurrency = String(providerPlan?.item?.currency || '').toUpperCase();
+    if (providerAmount !== plan.amountPaise || providerCurrency !== plan.currency) {
+      return send(res, 409, { error: 'This plan is temporarily unavailable. Please try again later.' });
+    }
     const existing = (await database().query(
       `SELECT * FROM cheaty_subscriptions WHERE session_id=$1 AND plan_key=$2 AND pricing_region=$3 AND status IN ('created','authenticated','active') ORDER BY created_at DESC LIMIT 1`,
       [sessionID, planKey, region]

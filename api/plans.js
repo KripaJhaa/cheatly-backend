@@ -4,6 +4,7 @@ export default async function handler(req, res) {
   applyCors(req, res);
   if (req.method === 'OPTIONS') return res.status(204).end();
   if (req.method !== 'GET') return send(res, 405, { error: 'Method not allowed' });
+  res.setHeader('Cache-Control', 'no-store');
   const region = pricingRegion(req);
   return send(res, 200, {
     keyID: process.env.RAZORPAY_KEY_ID || '',
